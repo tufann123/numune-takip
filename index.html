@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Numune / Kartela Takip</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --card:#ffffff;
+    --border:#e2e5ea;
+    --text:#1c2230;
+    --muted:#6b7280;
+    --primary:#2f6f4f;
+    --primary-dark:#245a40;
+    --accent:#b3853d;
+    --danger:#b3403d;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:15px;
+  }
+  [hidden]{display:none!important;}
+  a{color:var(--primary);}
+
+  #boot-screen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    text-align:center;
+    color:var(--muted);
+  }
+  .boot-card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:32px 28px;
+    max-width:380px;
+  }
+  .boot-card h1{font-size:18px;margin:0 0 8px;color:var(--text);}
+
+  label{
+    display:block;
+    font-size:13px;
+    font-weight:600;
+    margin-bottom:6px;
+    color:var(--text);
+  }
+  input[type=text], input[type=date], select, textarea{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:14px;
+    margin-bottom:16px;
+    background:#fff;
+    color:var(--text);
+    font-family:inherit;
+  }
+  textarea{min-height:60px;resize:vertical;}
+  button{
+    cursor:pointer;
+    border:none;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+    padding:10px 16px;
+    font-family:inherit;
+  }
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:hover{background:var(--primary-dark);}
+  .btn-secondary{background:#eceef1;color:var(--text);}
+  .btn-secondary:hover{background:#dfe2e7;}
+  .error-msg{
+    background:#fbeceb;
+    color:var(--danger);
+    border:1px solid #f1c9c7;
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:13px;
+    margin-bottom:16px;
+  }
+
+  header.topbar{
+    background:var(--card);
+    border-bottom:1px solid var(--border);
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    position:sticky;
+    top:0;
+    z-index:5;
+  }
+  header.topbar h1{
+    font-size:18px;
+    margin:0;
+  }
+  .user-chip{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .badge{
+    display:inline-block;
+    padding:2px 9px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.02em;
+  }
+  .badge-editor{background:#e6f0ea;color:var(--primary-dark);}
+  .badge-viewer{background:#eef0f3;color:var(--muted);}
+
+  main{
+    max-width:1180px;
+    margin:0 auto;
+    padding:20px;
+  }
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    margin-bottom:16px;
+  }
+  .toolbar input[type=text]{
+    margin-bottom:0;
+    max-width:280px;
+  }
+  .toolbar .spacer{flex:1;}
+  .count-pill{
+    font-size:13px;
+    color:var(--muted);
+  }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .table-wrap{
+    overflow-x:auto;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:820px;
+  }
+  th, td{
+    text-align:left;
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    font-size:13.5px;
+    vertical-align:top;
+  }
+  th{
+    background:#fafbfc;
+    color:var(--muted);
+    font-weight:700;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  tbody tr:hover{background:#fafbfc;}
+  tbody tr.row-clickable{cursor:pointer;}
+  .status-pill{
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .status-bekliyor{background:#fdf1e2;color:#8a5a12;}
+  .status-dagitildi{background:#e6f0ea;color:var(--primary-dark);}
+
+  .detail-row td{
+    background:#fbfbfc;
+    padding:16px 20px;
+  }
+  .detail-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:10px 24px;
+    margin-bottom:16px;
+    font-size:13px;
+  }
+  .detail-grid div span.k{
+    display:block;
+    color:var(--muted);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    margin-bottom:2px;
+  }
+  .dist-table{
+    width:100%;
+    border-collapse:collapse;
+    margin-bottom:12px;
+  }
+  .dist-table th, .dist-table td{
+    padding:7px 10px;
+    font-size:13px;
+    border-bottom:1px solid var(--border);
+  }
+  .dist-table th{background:transparent;color:var(--muted);font-size:11px;}
+  .tip-uretim{color:var(--primary-dark);font-weight:700;}
+  .tip-fason{color:var(--accent);font-weight:700;}
+  .empty-note{color:var(--muted);font-size:13px;padding:10px 0;}
+
+  .modal-backdrop{
+    position:fixed;inset:0;
+    background:rgba(20,22,26,.45);
+    display:flex;align-items:center;justify-content:center;
+    padding:20px;
+    z-index:20;
+  }
+  .modal{
+    background:#fff;
+    border-radius:var(--radius);
+    padding:26px;
+    width:100%;
+    max-width:480px;
+    max-height:90vh;
+    overflow-y:auto;
+  }
+  .modal h2{margin:0 0 18px;font-size:17px;}
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:6px;
+  }
+  .form-row-2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 12px;
+  }
+  footer.hint{
+    text-align:center;
+    color:var(--muted);
+    font-size:12px;
+    padding:30px 0 10px;
+  }
+  .toast{
+    position:fixed;
+    bottom:20px;right:20px;
+    background:#1c2230;
+    color:#fff;
+    padding:10px 16px;
+    border-radius:8px;
+    font-size:13px;
+    z-index:50;
+    max-width:320px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Giris, Cloudflare Access tarafindan bu sayfaya ULASMADAN ONCE
+     yapiliyor (e-posta + tek kullanimlik kod). Bu yuzden burada ayrica
+     bir giris ekrani yok; sadece kisa bir yukleniyor/hata ekrani var. -->
+<div id="boot-screen">
+  <div class="boot-card">
+    <h1>Numune / Kartela Takip</h1>
+    <p id="boot-message">Yükleniyor...</p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <h1>Numune / Kartela Takip</h1>
+    <div class="user-chip">
+      <span id="user-name">-</span>
+      <span id="user-role-badge" class="badge badge-viewer">Görüntüleyici</span>
+      <button class="btn-secondary" id="logout-btn">Çıkış</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <input type="text" id="search-input" placeholder="Ara: kod, numune adı, müşteri..." />
+      <span class="count-pill" id="count-pill"></span>
+      <div class="spacer"></div>
+      <button class="btn-primary" id="open-new-numune" hidden>+ Yeni Numune</button>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Kod</th>
+              <th>Numune Adı</th>
+              <th>Müşteri</th>
+              <th>Model / Sipariş No</th>
+              <th>Renk / Beden</th>
+              <th>Modelhaneden Geliş</th>
+              <th>Durum</th>
+            </tr>
+          </thead>
+          <tbody id="numune-tbody">
+            <tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <footer class="hint">Narkonteks &middot; Numune / Kartela Takip Sistemi</footer>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modal-numune" hidden>
+  <div class="modal">
+    <h2>Yeni Numune / Kartela</h2>
+    <div id="numune-form-error" class="error-msg" hidden></div>
+    <form id="numune-form">
+      <label>Numune / Kartela Adı *</label>
+      <input type="text" id="f-numune-adi" required />
+      <div class="form-row-2">
+        <div>
+          <label>Kod</label>
+          <input type="text" id="f-kod" />
+        </div>
+        <div>
+          <label>Modelhaneden Geliş Tarihi *</label>
+          <input type="date" id="f-gelis-tarihi" required />
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label>Müşteri</label>
+          <input type="text" id="f-musteri" />
+        </div>
+        <div>
+          <label>Model / Sipariş No</label>
+          <input type="text" id="f-model-siparis" />
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label>Renk</label>
+          <input type="text" id="f-renk" />
+        </div>
+        <div>
+          <label>Beden</label>
+          <input type="text" id="f-beden" />
+        </div>
+      </div>
+      <label>Açıklama</label>
+      <textarea id="f-aciklama"></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="numune-cancel">Vazgeç</button>
+        <button type="submit" class="btn-primary" id="numune-save">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-dagitim" hidden>
+  <div class="modal">
+    <h2>Yeni Dağıtım Kaydı</h2>
+    <div id="dagitim-form-error" class="error-msg" hidden></div>
+    <form id="dagitim-form">
+      <div class="form-row-2">
+        <div>
+          <label>Dağıtım Tarihi *</label>
+          <input type="date" id="d-tarih" required />
+        </div>
+        <div>
+          <label>Tip *</label>
+          <select id="d-tip" required>
+            <option value="uretim">Üretim</option>
+            <option value="fason">Fason</option>
+          </select>
+        </div>
+      </div>
+      <label>Kime Verildi (ekip / atölye / kişi) *</label>
+      <input type="text" id="d-kime" required />
+      <div class="form-row-2">
+        <div>
+          <label>Miktar / Adet (opsiyonel)</label>
+          <input type="text" id="d-miktar" />
+        </div>
+        <div>
+          <label>Not</label>
+          <input type="text" id="d-not" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="dagitim-cancel">Vazgeç</button>
+        <button type="submit" class="btn-primary" id="dagitim-save">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let currentUser = null;   // { email, ad_soyad, rol }
+let numuneler = [];
+let openDetailId = null;
+let searchTerm = "";
+
+const el = (id) => document.getElementById(id);
+
+function showToast(msg){
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 3500);
+}
+
+function fmtDate(d){
+  if(!d) return "-";
+  const dt = new Date(d.length > 10 ? d.replace(" ", "T") : d + "T00:00:00");
+  if(isNaN(dt)) return d;
+  return dt.toLocaleDateString("tr-TR", {day:"2-digit", month:"2-digit", year:"numeric"});
+}
+
+function todayStr(){
+  const d = new Date();
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, (m)=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  })[m]);
+}
+
+/* ---------------------------- BASLANGIC / KULLANICI ---------------------------- */
+
+async function init(){
+  try{
+    const res = await fetch("/api/me");
+    if(res.status === 401){
+      el("boot-message").textContent =
+        "Bu sayfaya erişiminiz doğrulanamadı. Lütfen sayfayı yenileyin; " +
+        "sorun devam ederse yöneticinizle iletişime geçin.";
+      return;
+    }
+    if(!res.ok){
+      el("boot-message").textContent = "Bir hata oluştu (" + res.status + "). Sayfayı yenileyin.";
+      return;
+    }
+    currentUser = await res.json();
+  } catch(err){
+    el("boot-message").textContent = "Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edip yenileyin.";
+    return;
+  }
+
+  el("boot-screen").hidden = true;
+  el("app").hidden = false;
+  el("user-name").textContent = currentUser.ad_soyad || currentUser.email;
+  const badge = el("user-role-badge");
+  if(currentUser.rol === "editor"){
+    badge.textContent = "Düzenleyici";
+    badge.className = "badge badge-editor";
+    el("open-new-numune").hidden = false;
+  } else {
+    badge.textContent = "Görüntüleyici";
+    badge.className = "badge badge-viewer";
+    el("open-new-numune").hidden = true;
+  }
+  await loadNumuneler();
+}
+
+el("logout-btn").addEventListener("click", ()=>{
+  window.location.href = "/cdn-cgi/access/logout";
+});
+
+/* ------------------------- VERI YUKLEME ------------------------- */
+
+async function loadNumuneler(){
+  el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>`;
+
+  const [numRes, distRes] = await Promise.all([
+    fetch("/api/numuneler"),
+    fetch("/api/dagitimlar"),
+  ]);
+
+  if(!numRes.ok){
+    el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Veri yüklenemedi.</td></tr>`;
+    return;
+  }
+
+  const { numuneler: nums } = await numRes.json();
+  const { dagitimlar: dists } = distRes.ok ? await distRes.json() : { dagitimlar: [] };
+
+  const distsByNumune = {};
+  (dists || []).forEach(d=>{
+    (distsByNumune[d.numune_id] ||= []).push(d);
+  });
+
+  numuneler = (nums || []).map(n => ({...n, dagitimlar: distsByNumune[n.id] || []}));
+  renderTable();
+}
+
+/* ------------------------- GORUNTULEME ------------------------- */
+
+function matchesSearch(n){
+  if(!searchTerm) return true;
+  const hay = [n.kod, n.numune_adi, n.musteri, n.model_siparis_no, n.renk, n.beden]
+    .filter(Boolean).join(" ").toLowerCase();
+  return hay.includes(searchTerm.toLowerCase());
+}
+
+function renderTable(){
+  const tbody = el("numune-tbody");
+  const filtered = numuneler.filter(matchesSearch);
+  el("count-pill").textContent = `${filtered.length} kayıt`;
+
+  if(filtered.length === 0){
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-note">Kayıt bulunamadı.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = "";
+  filtered.forEach(n=>{
+    const count = n.dagitimlar.length;
+    const statusHtml = count === 0
+      ? `<span class="status-pill status-bekliyor">Kesimhanede</span>`
+      : `<span class="status-pill status-dagitildi">Dağıtıldı (${count})</span>`;
+
+    const tr = document.createElement("tr");
+    tr.className = "row-clickable";
+    tr.innerHTML = `
+      <td>${escapeHtml(n.kod || "-")}</td>
+      <td><strong>${escapeHtml(n.numune_adi)}</strong></td>
+      <td>${escapeHtml(n.musteri || "-")}</td>
+      <td>${escapeHtml(n.model_siparis_no || "-")}</td>
+      <td>${escapeHtml([n.renk, n.beden].filter(Boolean).join(" / ") || "-")}</td>
+      <td>${fmtDate(n.modelhaneden_gelis_tarihi)}</td>
+      <td>${statusHtml}</td>
+    `;
+    tr.addEventListener("click", ()=> toggleDetail(n.id));
+    tbody.appendChild(tr);
+
+    if(openDetailId === n.id){
+      const detailTr = document.createElement("tr");
+      detailTr.className = "detail-row";
+      const td = document.createElement("td");
+      td.colSpan = 7;
+      td.appendChild(renderDetail(n));
+      detailTr.appendChild(td);
+      tbody.appendChild(detailTr);
+    }
+  });
+}
+
+function renderDetail(n){
+  const wrap = document.createElement("div");
+
+  const grid = document.createElement("div");
+  grid.className = "detail-grid";
+  grid.innerHTML = `
+    <div><span class="k">Açıklama</span>${escapeHtml(n.aciklama || "-")}</div>
+    <div><span class="k">Oluşturulma</span>${fmtDate(n.created_at)}</div>
+  `;
+  wrap.appendChild(grid);
+
+  const distTitle = document.createElement("div");
+  distTitle.style.fontWeight = "700";
+  distTitle.style.fontSize = "13px";
+  distTitle.style.marginBottom = "8px";
+  distTitle.textContent = "Dağıtım Geçmişi";
+  wrap.appendChild(distTitle);
+
+  if(n.dagitimlar.length === 0){
+    const p = document.createElement("div");
+    p.className = "empty-note";
+    p.textContent = "Henüz dağıtım kaydı yok.";
+    wrap.appendChild(p);
+  } else {
+    const table = document.createElement("table");
+    table.className = "dist-table";
+    table.innerHTML = `
+      <thead><tr><th>Tarih</th><th>Tip</th><th>Kime Verildi</th><th>Miktar</th><th>Not</th></tr></thead>
+    `;
+    const tb = document.createElement("tbody");
+    n.dagitimlar.forEach(d=>{
+      const row = document.createElement("tr");
+      const tipClass = d.tip === "uretim" ? "tip-uretim" : "tip-fason";
+      const tipLabel = d.tip === "uretim" ? "Üretim" : "Fason";
+      row.innerHTML = `
+        <td>${fmtDate(d.dagitim_tarihi)}</td>
+        <td class="${tipClass}">${tipLabel}</td>
+        <td>${escapeHtml(d.kime)}</td>
+        <td>${escapeHtml(d.miktar || "-")}</td>
+        <td>${escapeHtml(d.not_ || "-")}</td>
+      `;
+      tb.appendChild(row);
+    });
+    table.appendChild(tb);
+    wrap.appendChild(table);
+  }
+
+  if(currentUser?.rol === "editor"){
+    const btn = document.createElement("button");
+    btn.className = "btn-secondary";
+    btn.textContent = "+ Dağıtım Ekle";
+    btn.addEventListener("click", (ev)=>{ ev.stopPropagation(); openDagitimModal(n.id); });
+    wrap.appendChild(btn);
+  }
+
+  wrap.addEventListener("click", (ev)=> ev.stopPropagation());
+  return wrap;
+}
+
+function toggleDetail(id){
+  openDetailId = (openDetailId === id) ? null : id;
+  renderTable();
+}
+
+el("search-input").addEventListener("input", (ev)=>{
+  searchTerm = ev.target.value;
+  renderTable();
+});
+
+/* ------------------------- YENI NUMUNE ------------------------- */
+
+el("open-new-numune").addEventListener("click", ()=>{
+  el("numune-form").reset();
+  el("f-gelis-tarihi").value = todayStr();
+  el("numune-form-error").hidden = true;
+  el("modal-numune").hidden = false;
+});
+el("numune-cancel").addEventListener("click", ()=> el("modal-numune").hidden = true);
+
+el("numune-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  const btn = el("numune-save");
+  btn.disabled = true;
+  const payload = {
+    numune_adi: el("f-numune-adi").value.trim(),
+    kod: el("f-kod").value.trim() || null,
+    modelhaneden_gelis_tarihi: el("f-gelis-tarihi").value,
+    musteri: el("f-musteri").value.trim() || null,
+    model_siparis_no: el("f-model-siparis").value.trim() || null,
+    renk: el("f-renk").value.trim() || null,
+    beden: el("f-beden").value.trim() || null,
+    aciklama: el("f-aciklama").value.trim() || null,
+  };
+
+  const res = await fetch("/api/numuneler", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  btn.disabled = false;
+
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("numune-form-error");
+    e.textContent = res.status === 403
+      ? "Bu işlem için yetkiniz yok."
+      : "Kaydedilemedi: " + (data.error || res.status);
+    e.hidden = false;
+    return;
+  }
+  el("modal-numune").hidden = true;
+  showToast("Numune kaydedildi.");
+  await loadNumuneler();
+});
+
+/* ------------------------- YENI DAGITIM ------------------------- */
+
+let dagitimForNumuneId = null;
+
+function openDagitimModal(numuneId){
+  dagitimForNumuneId = numuneId;
+  el("dagitim-form").reset();
+  el("d-tarih").value = todayStr();
+  el("dagitim-form-error").hidden = true;
+  el("modal-dagitim").hidden = false;
+}
+el("dagitim-cancel").addEventListener("click", ()=> el("modal-dagitim").hidden = true);
+
+el("dagitim-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  const btn = el("dagitim-save");
+  btn.disabled = true;
+  const payload = {
+    numune_id: dagitimForNumuneId,
+    dagitim_tarihi: el("d-tarih").value,
+    tip: el("d-tip").value,
+    kime: el("d-kime").value.trim(),
+    miktar: el("d-miktar").value.trim() || null,
+    not: el("d-not").value.trim() || null,
+  };
+
+  const res = await fetch("/api/dagitimlar", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  btn.disabled = false;
+
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("dagitim-form-error");
+    e.textContent = res.status === 403
+      ? "Bu işlem için yetkiniz yok."
+      : "Kaydedilemedi: " + (data.error || res.status);
+    e.hidden = false;
+    return;
+  }
+  el("modal-dagitim").hidden = true;
+  showToast("Dağıtım kaydedildi.");
+  await loadNumuneler();
+});
+
+init();
+</script>
+</body>
+</html>
