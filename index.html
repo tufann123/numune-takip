@@ -16,14 +16,20 @@
     --accent:#b3853d;
     --danger:#b3403d;
     --radius:10px;
+    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    --fs-xs:12px;
+    --fs-sm:13px;
+    --fs-base:14px;
+    --fs-lg:17px;
+    --fs-xl:20px;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box;font-family:inherit;}
   body{
     margin:0;
     background:var(--bg);
     color:var(--text);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-    font-size:15px;
+    font-family:var(--font);
+    font-size:var(--fs-base);
   }
   [hidden]{display:none!important;}
   a{color:var(--primary);}
@@ -45,18 +51,18 @@
     box-shadow:0 2px 10px rgba(0,0,0,.05);
   }
   .login-card h1{
-    font-size:20px;
+    font-size:var(--fs-xl);
     margin:0 0 4px;
   }
   .login-card p.sub{
     color:var(--muted);
     margin:0 0 24px;
-    font-size:13px;
+    font-size:var(--fs-sm);
   }
 
   label{
     display:block;
-    font-size:13px;
+    font-size:var(--fs-sm);
     font-weight:600;
     margin-bottom:6px;
     color:var(--text);
@@ -66,21 +72,19 @@
     padding:10px 12px;
     border:1px solid var(--border);
     border-radius:8px;
-    font-size:14px;
+    font-size:var(--fs-base);
     margin-bottom:16px;
     background:#fff;
     color:var(--text);
-    font-family:inherit;
   }
   textarea{min-height:60px;resize:vertical;}
   button{
     cursor:pointer;
     border:none;
     border-radius:8px;
-    font-size:14px;
+    font-size:var(--fs-base);
     font-weight:600;
     padding:10px 16px;
-    font-family:inherit;
   }
   .btn-primary{background:var(--primary);color:#fff;}
   .btn-primary:hover{background:var(--primary-dark);}
@@ -93,7 +97,7 @@
     border:1px solid #f1c9c7;
     border-radius:8px;
     padding:10px 12px;
-    font-size:13px;
+    font-size:var(--fs-sm);
     margin-bottom:16px;
   }
 
@@ -111,21 +115,21 @@
     z-index:5;
   }
   header.topbar h1{
-    font-size:18px;
+    font-size:var(--fs-lg);
     margin:0;
   }
   .user-chip{
     display:flex;
     align-items:center;
     gap:10px;
-    font-size:13px;
+    font-size:var(--fs-sm);
     color:var(--muted);
   }
   .badge{
     display:inline-block;
     padding:2px 9px;
     border-radius:999px;
-    font-size:11px;
+    font-size:var(--fs-xs);
     font-weight:700;
     letter-spacing:.02em;
   }
@@ -150,7 +154,7 @@
   }
   .toolbar .spacer{flex:1;}
   .count-pill{
-    font-size:13px;
+    font-size:var(--fs-sm);
     color:var(--muted);
   }
 
@@ -172,14 +176,14 @@
     text-align:left;
     padding:10px 12px;
     border-bottom:1px solid var(--border);
-    font-size:13.5px;
+    font-size:var(--fs-base);
     vertical-align:top;
   }
   th{
     background:#fafbfc;
     color:var(--muted);
     font-weight:700;
-    font-size:12px;
+    font-size:var(--fs-xs);
     text-transform:uppercase;
     letter-spacing:.03em;
     white-space:nowrap;
@@ -190,7 +194,7 @@
     display:inline-block;
     padding:3px 10px;
     border-radius:999px;
-    font-size:12px;
+    font-size:var(--fs-xs);
     font-weight:700;
     white-space:nowrap;
   }
@@ -206,7 +210,7 @@
     margin-bottom:16px;
   }
   .talep-card h2{
-    font-size:14px;
+    font-size:var(--fs-lg);
     margin:0 0 12px;
     color:#8a5a12;
   }
@@ -217,14 +221,14 @@
     gap:10px;
     padding:8px 0;
     border-bottom:1px solid #f0e2c4;
-    font-size:13.5px;
+    font-size:var(--fs-base);
   }
   .talep-row:last-child{border-bottom:none;}
   .talep-row .talep-info{flex:1;min-width:200px;}
-  .talep-row .talep-note{color:var(--muted);font-size:12.5px;}
+  .talep-row .talep-note{color:var(--muted);font-size:var(--fs-sm);}
   .btn-small{
     padding:6px 10px;
-    font-size:12.5px;
+    font-size:var(--fs-sm);
   }
 
   .detail-row td{
@@ -236,12 +240,12 @@
     grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
     gap:10px 24px;
     margin-bottom:16px;
-    font-size:13px;
+    font-size:var(--fs-base);
   }
   .detail-grid div span.k{
     display:block;
     color:var(--muted);
-    font-size:11px;
+    font-size:var(--fs-xs);
     text-transform:uppercase;
     letter-spacing:.03em;
     margin-bottom:2px;
@@ -253,13 +257,15 @@
   }
   .dist-table th, .dist-table td{
     padding:7px 10px;
-    font-size:13px;
+    font-size:var(--fs-base);
     border-bottom:1px solid var(--border);
   }
-  .dist-table th{background:transparent;color:var(--muted);font-size:11px;}
+  .dist-table th{background:transparent;color:var(--muted);font-size:var(--fs-xs);}
   .tip-uretim{color:var(--primary-dark);font-weight:700;}
   .tip-fason{color:var(--accent);font-weight:700;}
-  .empty-note{color:var(--muted);font-size:13px;padding:10px 0;}
+  .empty-note{color:var(--muted);font-size:var(--fs-sm);padding:10px 0;}
+  .detail-title{font-weight:700;font-size:var(--fs-base);margin-bottom:8px;}
+  .musteri-yeni-wrap{margin-top:-8px;}
 
   .modal-backdrop{
     position:fixed;inset:0;
@@ -277,7 +283,7 @@
     max-height:90vh;
     overflow-y:auto;
   }
-  .modal h2{margin:0 0 18px;font-size:17px;}
+  .modal h2{margin:0 0 18px;font-size:var(--fs-lg);}
   .modal-actions{
     display:flex;
     justify-content:flex-end;
@@ -292,7 +298,7 @@
   footer.hint{
     text-align:center;
     color:var(--muted);
-    font-size:12px;
+    font-size:var(--fs-xs);
     padding:30px 0 10px;
   }
   footer.hint a{color:var(--muted);}
@@ -303,7 +309,7 @@
     color:#fff;
     padding:10px 16px;
     border-radius:8px;
-    font-size:13px;
+    font-size:var(--fs-sm);
     z-index:50;
     max-width:320px;
   }
@@ -345,7 +351,7 @@
     </div>
 
     <div class="toolbar">
-      <input type="text" id="search-input" placeholder="Ara: kod, numune adı, müşteri..." />
+      <input type="text" id="search-input" placeholder="Ara: numune adı, müşteri, model..." />
       <span class="count-pill" id="count-pill"></span>
       <div class="spacer"></div>
       <button class="btn-primary" id="open-new-numune" hidden>+ Yeni Numune</button>
@@ -356,7 +362,6 @@
         <table>
           <thead>
             <tr>
-              <th>Kod</th>
               <th>Numune Adı</th>
               <th>Müşteri</th>
               <th>Model / Sipariş No</th>
@@ -367,7 +372,7 @@
             </tr>
           </thead>
           <tbody id="numune-tbody">
-            <tr><td colspan="8" class="empty-note">Yükleniyor...</td></tr>
+            <tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>
           </tbody>
         </table>
       </div>
@@ -384,10 +389,21 @@
     <form id="numune-form">
       <label>Numune / Kartela Adı *</label>
       <input type="text" id="f-numune-adi" required />
+
+      <label>Müşteri *</label>
+      <select id="f-musteri" required>
+        <option value="" disabled selected>Seçiniz...</option>
+        <option value="__new__">+ Yeni müşteri ekle...</option>
+      </select>
+      <div class="musteri-yeni-wrap" id="musteri-yeni-wrap" hidden>
+        <label>Yeni Müşteri Adı *</label>
+        <input type="text" id="f-musteri-yeni" placeholder="Müşteri adını yazın" />
+      </div>
+
       <div class="form-row-2">
         <div>
-          <label>Kod</label>
-          <input type="text" id="f-kod" />
+          <label>Model / Sipariş No *</label>
+          <input type="text" id="f-model-siparis" required />
         </div>
         <div>
           <label>Modelhaneden Geliş Tarihi *</label>
@@ -396,22 +412,12 @@
       </div>
       <div class="form-row-2">
         <div>
-          <label>Müşteri</label>
-          <input type="text" id="f-musteri" />
+          <label>Renk *</label>
+          <input type="text" id="f-renk" required />
         </div>
         <div>
-          <label>Model / Sipariş No</label>
-          <input type="text" id="f-model-siparis" />
-        </div>
-      </div>
-      <div class="form-row-2">
-        <div>
-          <label>Renk</label>
-          <input type="text" id="f-renk" />
-        </div>
-        <div>
-          <label>Beden</label>
-          <input type="text" id="f-beden" />
+          <label>Beden *</label>
+          <input type="text" id="f-beden" required />
         </div>
       </div>
       <label>Açıklama</label>
@@ -481,6 +487,7 @@
 let currentUser = null;   // { email, ad_soyad, rol }
 let numuneler = [];
 let talepler = [];
+let musteriListesi = [];
 let openDetailId = null;
 let searchTerm = "";
 
@@ -601,7 +608,7 @@ el("logout-btn").addEventListener("click", async ()=>{
 /* ------------------------- VERI YUKLEME ------------------------- */
 
 async function loadNumuneler(){
-  el("numune-tbody").innerHTML = `<tr><td colspan="8" class="empty-note">Yükleniyor...</td></tr>`;
+  el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>`;
 
   const [numRes, distRes, talepRes] = await Promise.all([
     fetch("/api/numuneler", { credentials: "same-origin" }),
@@ -610,7 +617,7 @@ async function loadNumuneler(){
   ]);
 
   if(!numRes.ok){
-    el("numune-tbody").innerHTML = `<tr><td colspan="8" class="empty-note">Veri yüklenemedi.</td></tr>`;
+    el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Veri yüklenemedi.</td></tr>`;
     return;
   }
 
@@ -637,7 +644,7 @@ function pendingTalepFor(numuneId){
 
 function matchesSearch(n){
   if(!searchTerm) return true;
-  const hay = [n.kod, n.numune_adi, n.musteri, n.model_siparis_no, n.renk, n.beden]
+  const hay = [n.numune_adi, n.musteri, n.model_siparis_no, n.renk, n.beden]
     .filter(Boolean).join(" ").toLowerCase();
   return hay.includes(searchTerm.toLowerCase());
 }
@@ -648,7 +655,7 @@ function renderTable(){
   el("count-pill").textContent = `${filtered.length} kayıt`;
 
   if(filtered.length === 0){
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-note">Kayıt bulunamadı.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-note">Kayıt bulunamadı.</td></tr>`;
     return;
   }
 
@@ -670,7 +677,6 @@ function renderTable(){
     const tr = document.createElement("tr");
     tr.className = "row-clickable";
     tr.innerHTML = `
-      <td>${escapeHtml(n.kod || "-")}</td>
       <td><strong>${escapeHtml(n.numune_adi)}</strong></td>
       <td>${escapeHtml(n.musteri || "-")}</td>
       <td>${escapeHtml(n.model_siparis_no || "-")}</td>
@@ -696,7 +702,7 @@ function renderTable(){
       const detailTr = document.createElement("tr");
       detailTr.className = "detail-row";
       const td = document.createElement("td");
-      td.colSpan = 8;
+      td.colSpan = 7;
       td.appendChild(renderDetail(n));
       detailTr.appendChild(td);
       tbody.appendChild(detailTr);
@@ -724,7 +730,7 @@ function renderPendingTalepler(){
     row.className = "talep-row";
     row.innerHTML = `
       <div class="talep-info">
-        <strong>${escapeHtml(n ? n.numune_adi : "(numune bulunamadı)")}</strong>${n && n.kod ? " · " + escapeHtml(n.kod) : ""}<br/>
+        <strong>${escapeHtml(n ? n.numune_adi : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}<br/>
         <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDate(t.created_at)} tarihinde talep edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
       </div>
     `;
@@ -771,9 +777,7 @@ function renderDetail(n){
   wrap.appendChild(grid);
 
   const distTitle = document.createElement("div");
-  distTitle.style.fontWeight = "700";
-  distTitle.style.fontSize = "13px";
-  distTitle.style.marginBottom = "8px";
+  distTitle.className = "detail-title";
   distTitle.textContent = "Dağıtım Geçmişi";
   wrap.appendChild(distTitle);
 
@@ -830,26 +834,104 @@ el("search-input").addEventListener("input", (ev)=>{
 
 /* ------------------------- YENI NUMUNE ------------------------- */
 
-el("open-new-numune").addEventListener("click", ()=>{
+async function loadMusteriler(){
+  const sel = el("f-musteri");
+  const prevValue = sel.value;
+  try{
+    const res = await fetch("/api/musteriler", { credentials: "same-origin" });
+    if(res.ok){
+      const data = await res.json();
+      musteriListesi = data.musteriler || [];
+    }
+  } catch(err){
+    musteriListesi = musteriListesi || [];
+  }
+
+  sel.innerHTML = `<option value="" disabled>Seçiniz...</option>`;
+  musteriListesi.forEach(m=>{
+    const opt = document.createElement("option");
+    opt.value = m.ad;
+    opt.textContent = m.ad;
+    sel.appendChild(opt);
+  });
+  const optNew = document.createElement("option");
+  optNew.value = "__new__";
+  optNew.textContent = "+ Yeni müşteri ekle...";
+  sel.appendChild(optNew);
+
+  if(prevValue && [...sel.options].some(o=>o.value === prevValue)){
+    sel.value = prevValue;
+  } else {
+    sel.value = "";
+  }
+}
+
+el("f-musteri").addEventListener("change", ()=>{
+  const isNew = el("f-musteri").value === "__new__";
+  el("musteri-yeni-wrap").hidden = !isNew;
+  if(!isNew) el("f-musteri-yeni").value = "";
+});
+
+el("open-new-numune").addEventListener("click", async ()=>{
   el("numune-form").reset();
   el("f-gelis-tarihi").value = todayStr();
+  el("musteri-yeni-wrap").hidden = true;
   el("numune-form-error").hidden = true;
+  await loadMusteriler();
   el("modal-numune").hidden = false;
 });
 el("numune-cancel").addEventListener("click", ()=> el("modal-numune").hidden = true);
 
 el("numune-form").addEventListener("submit", async (ev)=>{
   ev.preventDefault();
+  const e = el("numune-form-error");
+  e.hidden = true;
+
+  const musteriSecim = el("f-musteri").value;
+  let musteri = musteriSecim;
+
   const btn = el("numune-save");
   btn.disabled = true;
+
+  if(musteriSecim === "__new__"){
+    const yeniAd = el("f-musteri-yeni").value.trim();
+    if(!yeniAd){
+      e.textContent = "Yeni müşteri adını yazın.";
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const musteriRes = await fetch("/api/musteriler", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ad: yeniAd }),
+    });
+    if(!musteriRes.ok){
+      const data = await musteriRes.json().catch(()=>({}));
+      e.textContent = "Müşteri eklenemedi: " + (data.error || musteriRes.status);
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const musteriData = await musteriRes.json();
+    musteri = musteriData.musteri.ad;
+  }
+
+  if(!musteri || musteriSecim === ""){
+    e.textContent = "Müşteri seçimi zorunludur.";
+    e.hidden = false;
+    btn.disabled = false;
+    return;
+  }
+
   const payload = {
     numune_adi: el("f-numune-adi").value.trim(),
-    kod: el("f-kod").value.trim() || null,
     modelhaneden_gelis_tarihi: el("f-gelis-tarihi").value,
-    musteri: el("f-musteri").value.trim() || null,
-    model_siparis_no: el("f-model-siparis").value.trim() || null,
-    renk: el("f-renk").value.trim() || null,
-    beden: el("f-beden").value.trim() || null,
+    musteri: musteri,
+    model_siparis_no: el("f-model-siparis").value.trim(),
+    renk: el("f-renk").value.trim(),
+    beden: el("f-beden").value.trim(),
     aciklama: el("f-aciklama").value.trim() || null,
   };
 
@@ -863,10 +945,13 @@ el("numune-form").addEventListener("submit", async (ev)=>{
 
   if(!res.ok){
     const data = await res.json().catch(()=>({}));
-    const e = el("numune-form-error");
-    e.textContent = res.status === 403
-      ? "Bu işlem için yetkiniz yok."
-      : "Kaydedilemedi: " + (data.error || res.status);
+    if(res.status === 403){
+      e.textContent = "Bu işlem için yetkiniz yok.";
+    } else if(res.status === 409){
+      e.textContent = data.error || "Bu müşteri, model/sipariş no ve renk kombinasyonu zaten kayıtlı.";
+    } else {
+      e.textContent = "Kaydedilemedi: " + (data.error || res.status);
+    }
     e.hidden = false;
     return;
   }
