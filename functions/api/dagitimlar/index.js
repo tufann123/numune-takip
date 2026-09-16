@@ -43,5 +43,16 @@ export async function onRequestPost(context) {
     )
     .run();
 
+  // Bu numune icin bekleyen bir talep varsa, dagitim yapildigi icin
+  // otomatik olarak "tamamlandi" olarak isaretle.
+  await context.env.DB
+    .prepare(
+      `UPDATE talepler
+       SET durum = 'tamamlandi', tamamlanma_tarihi = datetime('now'), tamamlayan_email = ?
+       WHERE numune_id = ? AND durum = 'bekliyor'`
+    )
+    .bind(user.email, body.numune_id)
+    .run();
+
   return json({ id }, 201);
 }
