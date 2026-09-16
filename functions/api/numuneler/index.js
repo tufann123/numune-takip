@@ -21,13 +21,12 @@ export async function onRequestPost(context) {
   const musteri = (body?.musteri || "").trim();
   const model_siparis_no = (body?.model_siparis_no || "").trim();
   const renk = (body?.renk || "").trim();
-  const beden = (body?.beden || "").trim();
   const modelhaneden_gelis_tarihi = (body?.modelhaneden_gelis_tarihi || "").trim();
   const aciklama = (body?.aciklama || "").trim();
 
-  if (!numune_adi || !musteri || !model_siparis_no || !renk || !beden || !modelhaneden_gelis_tarihi) {
+  if (!numune_adi || !musteri || !model_siparis_no || !renk || !modelhaneden_gelis_tarihi) {
     return json(
-      { error: "Numune adı, müşteri, model/sipariş no, renk, beden ve geliş tarihi zorunludur." },
+      { error: "Numune adı, müşteri, model/sipariş no, renk ve geliş tarihi zorunludur." },
       400
     );
   }
@@ -56,8 +55,8 @@ export async function onRequestPost(context) {
   await context.env.DB
     .prepare(
       `INSERT INTO numuneler
-        (id, numune_adi, musteri, model_siparis_no, renk, beden, modelhaneden_gelis_tarihi, aciklama, olusturan_email)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, numune_adi, musteri, model_siparis_no, renk, modelhaneden_gelis_tarihi, aciklama, olusturan_email)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -65,7 +64,6 @@ export async function onRequestPost(context) {
       musteri,
       model_siparis_no,
       renk,
-      beden,
       modelhaneden_gelis_tarihi,
       aciklama || null,
       user.email
