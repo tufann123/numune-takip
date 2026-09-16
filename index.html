@@ -28,23 +28,31 @@
   [hidden]{display:none!important;}
   a{color:var(--primary);}
 
-  #boot-screen{
+  #login-screen{
     min-height:100vh;
     display:flex;
     align-items:center;
     justify-content:center;
     padding:24px;
-    text-align:center;
-    color:var(--muted);
   }
-  .boot-card{
+  .login-card{
     background:var(--card);
     border:1px solid var(--border);
     border-radius:var(--radius);
     padding:32px 28px;
-    max-width:380px;
+    width:100%;
+    max-width:360px;
+    box-shadow:0 2px 10px rgba(0,0,0,.05);
   }
-  .boot-card h1{font-size:18px;margin:0 0 8px;color:var(--text);}
+  .login-card h1{
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  .login-card p.sub{
+    color:var(--muted);
+    margin:0 0 24px;
+    font-size:13px;
+  }
 
   label{
     display:block;
@@ -53,7 +61,7 @@
     margin-bottom:6px;
     color:var(--text);
   }
-  input[type=text], input[type=date], select, textarea{
+  input[type=text], input[type=password], input[type=date], select, textarea{
     width:100%;
     padding:10px 12px;
     border:1px solid var(--border);
@@ -78,6 +86,7 @@
   .btn-primary:hover{background:var(--primary-dark);}
   .btn-secondary{background:#eceef1;color:var(--text);}
   .btn-secondary:hover{background:#dfe2e7;}
+  .btn-block{width:100%;}
   .error-msg{
     background:#fbeceb;
     color:var(--danger);
@@ -256,6 +265,7 @@
     font-size:12px;
     padding:30px 0 10px;
   }
+  footer.hint a{color:var(--muted);}
   .toast{
     position:fixed;
     bottom:20px;right:20px;
@@ -271,16 +281,23 @@
 </head>
 <body>
 
-<!-- Giris, Cloudflare Access tarafindan bu sayfaya ULASMADAN ONCE
-     yapiliyor (e-posta + tek kullanimlik kod). Bu yuzden burada ayrica
-     bir giris ekrani yok; sadece kisa bir yukleniyor/hata ekrani var. -->
-<div id="boot-screen">
-  <div class="boot-card">
+<!-- ================= LOGIN ================= -->
+<div id="login-screen">
+  <div class="login-card">
     <h1>Numune / Kartela Takip</h1>
-    <p id="boot-message">Yükleniyor...</p>
+    <p class="sub">Modelhane &rarr; Kesimhane &rarr; &Uuml;retim / Fason süreç kayıtları</p>
+    <div id="login-error" class="error-msg" hidden></div>
+    <form id="login-form">
+      <label for="login-username">Kullanıcı adı</label>
+      <input type="text" id="login-username" autocomplete="username" required />
+      <label for="login-password">Şifre</label>
+      <input type="password" id="login-password" autocomplete="current-password" required />
+      <button type="submit" class="btn-primary btn-block" id="login-submit">Giriş Yap</button>
+    </form>
   </div>
 </div>
 
+<!-- ================= APP ================= -->
 <div id="app" hidden>
   <header class="topbar">
     <h1>Numune / Kartela Takip</h1>
@@ -445,28 +462,32 @@ function escapeHtml(str){
   })[m]);
 }
 
-/* ---------------------------- BASLANGIC / KULLANICI ---------------------------- */
+/* ---------------------------- GIRIS / OTURUM ---------------------------- */
 
 async function init(){
+  const ok = await tryLoadMe();
+  if(!ok) showLogin();
+}
+
+async function tryLoadMe(){
   try{
-    const res = await fetch("/api/me");
-    if(res.status === 401){
-      el("boot-message").textContent =
-        "Bu sayfaya erişiminiz doğrulanamadı. Lütfen sayfayı yenileyin; " +
-        "sorun devam ederse yöneticinizle iletişime geçin.";
-      return;
-    }
-    if(!res.ok){
-      el("boot-message").textContent = "Bir hata oluştu (" + res.status + "). Sayfayı yenileyin.";
-      return;
-    }
+    const res = await fetch("/api/me", { credentials: "same-origin" });
+    if(!res.ok) return false;
     currentUser = await res.json();
   } catch(err){
-    el("boot-message").textContent = "Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edip yenileyin.";
-    return;
+    return false;
   }
+  showApp();
+  return true;
+}
 
-  el("boot-screen").hidden = true;
+function showLogin(){
+  el("login-screen").hidden = false;
+  el("app").hidden = true;
+}
+
+function showApp(){
+  el("login-screen").hidden = true;
   el("app").hidden = false;
   el("user-name").textContent = currentUser.ad_soyad || currentUser.email;
   const badge = el("user-role-badge");
@@ -479,11 +500,50 @@ async function init(){
     badge.className = "badge badge-viewer";
     el("open-new-numune").hidden = true;
   }
-  await loadNumuneler();
+  loadNumuneler();
 }
 
-el("logout-btn").addEventListener("click", ()=>{
-  window.location.href = "/cdn-cgi/access/logout";
+el("login-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  el("login-error").hidden = true;
+  const btn = el("login-submit");
+  btn.disabled = true;
+  btn.textContent = "Giriş yapılıyor...";
+
+  const email = el("login-username").value;
+  const password = el("login-password").value;
+
+  try{
+    const res = await fetch("/api/login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if(!res.ok){
+      const data = await res.json().catch(()=>({}));
+      el("login-error").textContent = data.error || "Giriş başarısız.";
+      el("login-error").hidden = false;
+      return;
+    }
+    currentUser = await res.json();
+    el("login-username").value = "";
+    el("login-password").value = "";
+    showApp();
+  } catch(err){
+    el("login-error").textContent = "Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.";
+    el("login-error").hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Giriş Yap";
+  }
+});
+
+el("logout-btn").addEventListener("click", async ()=>{
+  await fetch("/api/logout", { method: "POST", credentials: "same-origin" }).catch(()=>{});
+  currentUser = null;
+  numuneler = [];
+  showLogin();
 });
 
 /* ------------------------- VERI YUKLEME ------------------------- */
@@ -492,8 +552,8 @@ async function loadNumuneler(){
   el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>`;
 
   const [numRes, distRes] = await Promise.all([
-    fetch("/api/numuneler"),
-    fetch("/api/dagitimlar"),
+    fetch("/api/numuneler", { credentials: "same-origin" }),
+    fetch("/api/dagitimlar", { credentials: "same-origin" }),
   ]);
 
   if(!numRes.ok){
@@ -661,6 +721,7 @@ el("numune-form").addEventListener("submit", async (ev)=>{
 
   const res = await fetch("/api/numuneler", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
@@ -708,6 +769,7 @@ el("dagitim-form").addEventListener("submit", async (ev)=>{
 
   const res = await fetch("/api/dagitimlar", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
