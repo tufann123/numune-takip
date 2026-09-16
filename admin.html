@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kullanıcı Yönetimi</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --card:#ffffff;
+    --border:#e2e5ea;
+    --text:#1c2230;
+    --muted:#6b7280;
+    --primary:#2f6f4f;
+    --primary-dark:#245a40;
+    --danger:#b3403d;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:15px;
+    padding:24px;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+  h1{font-size:20px;margin:0 0 4px;}
+  p.sub{color:var(--muted);margin:0 0 24px;font-size:13px;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:24px;
+    margin-bottom:20px;
+  }
+  .card h2{font-size:15px;margin:0 0 16px;}
+  label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;}
+  input[type=text], input[type=password], select{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    font-size:14px;
+    margin-bottom:14px;
+    font-family:inherit;
+  }
+  button{
+    cursor:pointer;
+    border:none;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+    padding:10px 16px;
+    font-family:inherit;
+    background:var(--primary);
+    color:#fff;
+  }
+  button:hover{background:var(--primary-dark);}
+  .error-msg{
+    background:#fbeceb;color:var(--danger);border:1px solid #f1c9c7;
+    border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;
+  }
+  .ok-msg{
+    background:#eaf3ec;color:var(--primary-dark);border:1px solid #cfe4d6;
+    border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px;
+  }
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th, td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;}
+  .badge{
+    display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;
+  }
+  .badge-editor{background:#e6f0ea;color:var(--primary-dark);}
+  .badge-viewer{background:#eef0f3;color:var(--muted);}
+  [hidden]{display:none!important;}
+  .hint{color:var(--muted);font-size:12px;margin-top:-6px;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Kullanıcı Yönetimi</h1>
+  <p class="sub">Numune / Kartela Takip sistemine giriş yapacak kullanıcıları buradan ekleyip yönetebilirsiniz. Bu sayfa herkese açık görünür ama yönetici anahtarını bilmeyen biri hiçbir şey yapamaz/göremez.</p>
+
+  <div class="card">
+    <h2>Yönetici Anahtarı</h2>
+    <div id="key-error" class="error-msg" hidden></div>
+    <label for="admin-key">Anahtar</label>
+    <input type="password" id="admin-key" placeholder="Cloudflare'de ADMIN_KEY olarak tanımladığınız değer" />
+    <button id="unlock-btn">Kullanıcıları Getir</button>
+  </div>
+
+  <div class="card" id="add-card" hidden>
+    <h2>Kullanıcı Ekle / Güncelle</h2>
+    <p class="hint">Var olan bir kullanıcı adını tekrar girip şifre alanını doldurursanız şifresi değişir; boş bırakırsanız sadece ad/rol güncellenir.</p>
+    <div id="form-error" class="error-msg" hidden></div>
+    <div id="form-ok" class="ok-msg" hidden></div>
+    <form id="user-form">
+      <label>Kullanıcı adı (giriş ekranında kullanılacak) *</label>
+      <input type="text" id="f-email" placeholder="örn. kesimhane veya tufanelmas@narkonteks.com" required />
+      <label>Ad Soyad *</label>
+      <input type="text" id="f-adsoyad" required />
+      <label>Şifre (yeni kullanıcı için zorunlu, güncellemede opsiyonel)</label>
+      <input type="password" id="f-password" />
+      <label>Rol *</label>
+      <select id="f-rol" required>
+        <option value="editor">Düzenleyici (ekleme/değişiklik yapabilir)</option>
+        <option value="viewer">Görüntüleyici (sadece görebilir)</option>
+      </select>
+      <button type="submit">Kaydet</button>
+    </form>
+  </div>
+
+  <div class="card" id="list-card" hidden>
+    <h2>Mevcut Kullanıcılar</h2>
+    <table>
+      <thead><tr><th>Kullanıcı adı</th><th>Ad Soyad</th><th>Rol</th></tr></thead>
+      <tbody id="user-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const el = (id) => document.getElementById(id);
+let adminKey = "";
+
+el("unlock-btn").addEventListener("click", async () => {
+  el("key-error").hidden = true;
+  adminKey = el("admin-key").value.trim();
+  if(!adminKey){
+    el("key-error").textContent = "Anahtar boş olamaz.";
+    el("key-error").hidden = false;
+    return;
+  }
+  await loadUsers();
+});
+
+async function loadUsers(){
+  try{
+    const res = await fetch("/api/admin/users", {
+      headers: { "X-Admin-Key": adminKey },
+    });
+    if(res.status === 403){
+      el("key-error").textContent = "Anahtar yanlış.";
+      el("key-error").hidden = false;
+      el("add-card").hidden = true;
+      el("list-card").hidden = true;
+      return;
+    }
+    if(!res.ok){
+      el("key-error").textContent = "Bir hata oluştu (" + res.status + ").";
+      el("key-error").hidden = false;
+      return;
+    }
+    const { kullanicilar } = await res.json();
+    renderUsers(kullanicilar || []);
+    el("add-card").hidden = false;
+    el("list-card").hidden = false;
+  } catch(err){
+    el("key-error").textContent = "Sunucuya bağlanılamadı.";
+    el("key-error").hidden = false;
+  }
+}
+
+function renderUsers(users){
+  const tbody = el("user-tbody");
+  if(users.length === 0){
+    tbody.innerHTML = `<tr><td colspan="3">Henüz kullanıcı yok.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = "";
+  users.forEach(u => {
+    const tr = document.createElement("tr");
+    const badgeClass = u.rol === "editor" ? "badge-editor" : "badge-viewer";
+    const badgeLabel = u.rol === "editor" ? "Düzenleyici" : "Görüntüleyici";
+    tr.innerHTML = `
+      <td>${escapeHtml(u.email)}</td>
+      <td>${escapeHtml(u.ad_soyad || "-")}</td>
+      <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, (m)=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  })[m]);
+}
+
+el("user-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  el("form-error").hidden = true;
+  el("form-ok").hidden = true;
+
+  const payload = {
+    email: el("f-email").value.trim().toLowerCase(),
+    ad_soyad: el("f-adsoyad").value.trim(),
+    rol: el("f-rol").value,
+  };
+  const password = el("f-password").value;
+  if(password) payload.password = password;
+
+  try{
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-Admin-Key": adminKey },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      el("form-error").textContent = data.error || "Kaydedilemedi.";
+      el("form-error").hidden = false;
+      return;
+    }
+    el("form-ok").textContent = data.created ? "Kullanıcı oluşturuldu." : "Kullanıcı güncellendi.";
+    el("form-ok").hidden = false;
+    el("f-password").value = "";
+    await loadUsers();
+  } catch(err){
+    el("form-error").textContent = "Sunucuya bağlanılamadı.";
+    el("form-error").hidden = false;
+  }
+});
+</script>
+</body>
+</html>
