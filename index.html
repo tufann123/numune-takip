@@ -196,6 +196,36 @@
   }
   .status-bekliyor{background:#fdf1e2;color:#8a5a12;}
   .status-dagitildi{background:#e6f0ea;color:var(--primary-dark);}
+  .status-talep{background:#fde8e6;color:#9c3a2f;}
+
+  .talep-card{
+    background:#fff8ef;
+    border:1px solid #f0dcb8;
+    border-radius:var(--radius);
+    padding:16px 20px;
+    margin-bottom:16px;
+  }
+  .talep-card h2{
+    font-size:14px;
+    margin:0 0 12px;
+    color:#8a5a12;
+  }
+  .talep-row{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    padding:8px 0;
+    border-bottom:1px solid #f0e2c4;
+    font-size:13.5px;
+  }
+  .talep-row:last-child{border-bottom:none;}
+  .talep-row .talep-info{flex:1;min-width:200px;}
+  .talep-row .talep-note{color:var(--muted);font-size:12.5px;}
+  .btn-small{
+    padding:6px 10px;
+    font-size:12.5px;
+  }
 
   .detail-row td{
     background:#fbfbfc;
@@ -309,6 +339,11 @@
   </header>
 
   <main>
+    <div class="talep-card" id="talep-panel" hidden>
+      <h2>Bekleyen Talepler</h2>
+      <div id="talep-list"></div>
+    </div>
+
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="Ara: kod, numune adı, müşteri..." />
       <span class="count-pill" id="count-pill"></span>
@@ -328,10 +363,11 @@
               <th>Renk / Beden</th>
               <th>Modelhaneden Geliş</th>
               <th>Durum</th>
+              <th>Talep</th>
             </tr>
           </thead>
           <tbody id="numune-tbody">
-            <tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>
+            <tr><td colspan="8" class="empty-note">Yükleniyor...</td></tr>
           </tbody>
         </table>
       </div>
@@ -426,9 +462,25 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-talep" hidden>
+  <div class="modal">
+    <h2>Numune Talep Et</h2>
+    <div id="talep-form-error" class="error-msg" hidden></div>
+    <form id="talep-form">
+      <label>Not (opsiyonel)</label>
+      <textarea id="t-not" placeholder="Örn: acil, yarın sabah lazım..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="talep-cancel">Vazgeç</button>
+        <button type="submit" class="btn-primary" id="talep-save">Talep Et</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 let currentUser = null;   // { email, ad_soyad, rol }
 let numuneler = [];
+let talepler = [];
 let openDetailId = null;
 let searchTerm = "";
 
@@ -549,20 +601,22 @@ el("logout-btn").addEventListener("click", async ()=>{
 /* ------------------------- VERI YUKLEME ------------------------- */
 
 async function loadNumuneler(){
-  el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>`;
+  el("numune-tbody").innerHTML = `<tr><td colspan="8" class="empty-note">Yükleniyor...</td></tr>`;
 
-  const [numRes, distRes] = await Promise.all([
+  const [numRes, distRes, talepRes] = await Promise.all([
     fetch("/api/numuneler", { credentials: "same-origin" }),
     fetch("/api/dagitimlar", { credentials: "same-origin" }),
+    fetch("/api/talepler", { credentials: "same-origin" }),
   ]);
 
   if(!numRes.ok){
-    el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Veri yüklenemedi.</td></tr>`;
+    el("numune-tbody").innerHTML = `<tr><td colspan="8" class="empty-note">Veri yüklenemedi.</td></tr>`;
     return;
   }
 
   const { numuneler: nums } = await numRes.json();
   const { dagitimlar: dists } = distRes.ok ? await distRes.json() : { dagitimlar: [] };
+  const { talepler: taleps } = talepRes.ok ? await talepRes.json() : { talepler: [] };
 
   const distsByNumune = {};
   (dists || []).forEach(d=>{
@@ -570,7 +624,13 @@ async function loadNumuneler(){
   });
 
   numuneler = (nums || []).map(n => ({...n, dagitimlar: distsByNumune[n.id] || []}));
+  talepler = taleps || [];
   renderTable();
+  renderPendingTalepler();
+}
+
+function pendingTalepFor(numuneId){
+  return talepler.find(t => t.numune_id === numuneId && t.durum === "bekliyor") || null;
 }
 
 /* ------------------------- GORUNTULEME ------------------------- */
@@ -588,7 +648,7 @@ function renderTable(){
   el("count-pill").textContent = `${filtered.length} kayıt`;
 
   if(filtered.length === 0){
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-note">Kayıt bulunamadı.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-note">Kayıt bulunamadı.</td></tr>`;
     return;
   }
 
@@ -598,6 +658,14 @@ function renderTable(){
     const statusHtml = count === 0
       ? `<span class="status-pill status-bekliyor">Kesimhanede</span>`
       : `<span class="status-pill status-dagitildi">Dağıtıldı (${count})</span>`;
+
+    const pending = pendingTalepFor(n.id);
+    let talepHtml = "-";
+    if(pending){
+      talepHtml = `<span class="status-pill status-talep">Talep Edildi</span>`;
+    } else if(count === 0 && currentUser?.rol !== "editor"){
+      talepHtml = `<button type="button" class="btn-secondary btn-small btn-talep-et" data-id="${escapeHtml(n.id)}">Talep Et</button>`;
+    }
 
     const tr = document.createElement("tr");
     tr.className = "row-clickable";
@@ -609,19 +677,85 @@ function renderTable(){
       <td>${escapeHtml([n.renk, n.beden].filter(Boolean).join(" / ") || "-")}</td>
       <td>${fmtDate(n.modelhaneden_gelis_tarihi)}</td>
       <td>${statusHtml}</td>
+      <td>${talepHtml}</td>
     `;
-    tr.addEventListener("click", ()=> toggleDetail(n.id));
+    tr.addEventListener("click", (ev)=>{
+      if(ev.target.closest(".btn-talep-et")) return;
+      toggleDetail(n.id);
+    });
+    const talepBtn = tr.querySelector(".btn-talep-et");
+    if(talepBtn){
+      talepBtn.addEventListener("click", (ev)=>{
+        ev.stopPropagation();
+        openTalepModal(n.id);
+      });
+    }
     tbody.appendChild(tr);
 
     if(openDetailId === n.id){
       const detailTr = document.createElement("tr");
       detailTr.className = "detail-row";
       const td = document.createElement("td");
-      td.colSpan = 7;
+      td.colSpan = 8;
       td.appendChild(renderDetail(n));
       detailTr.appendChild(td);
       tbody.appendChild(detailTr);
     }
+  });
+}
+
+function renderPendingTalepler(){
+  const panel = el("talep-panel");
+  if(currentUser?.rol !== "editor"){
+    panel.hidden = true;
+    return;
+  }
+  const pending = talepler.filter(t => t.durum === "bekliyor");
+  if(pending.length === 0){
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const list = el("talep-list");
+  list.innerHTML = "";
+  pending.forEach(t=>{
+    const n = numuneler.find(x => x.id === t.numune_id);
+    const row = document.createElement("div");
+    row.className = "talep-row";
+    row.innerHTML = `
+      <div class="talep-info">
+        <strong>${escapeHtml(n ? n.numune_adi : "(numune bulunamadı)")}</strong>${n && n.kod ? " · " + escapeHtml(n.kod) : ""}<br/>
+        <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDate(t.created_at)} tarihinde talep edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
+      </div>
+    `;
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+
+    const btnDagit = document.createElement("button");
+    btnDagit.type = "button";
+    btnDagit.className = "btn-primary btn-small";
+    btnDagit.textContent = "Dağıtım Ekle";
+    btnDagit.addEventListener("click", ()=> openDagitimModal(t.numune_id));
+    actions.appendChild(btnDagit);
+
+    const btnDone = document.createElement("button");
+    btnDone.type = "button";
+    btnDone.className = "btn-secondary btn-small";
+    btnDone.textContent = "Tamamlandı işaretle";
+    btnDone.addEventListener("click", async ()=>{
+      btnDone.disabled = true;
+      await fetch(`/api/talepler/${encodeURIComponent(t.id)}/tamamla`, {
+        method: "POST",
+        credentials: "same-origin",
+      }).catch(()=>{});
+      showToast("Talep tamamlandı olarak işaretlendi.");
+      await loadNumuneler();
+    });
+    actions.appendChild(btnDone);
+
+    row.appendChild(actions);
+    list.appendChild(row);
   });
 }
 
@@ -786,6 +920,53 @@ el("dagitim-form").addEventListener("submit", async (ev)=>{
   }
   el("modal-dagitim").hidden = true;
   showToast("Dağıtım kaydedildi.");
+  await loadNumuneler();
+});
+
+/* ------------------------- TALEP ET ------------------------- */
+
+let talepForNumuneId = null;
+
+function openTalepModal(numuneId){
+  talepForNumuneId = numuneId;
+  el("talep-form").reset();
+  el("talep-form-error").hidden = true;
+  el("modal-talep").hidden = false;
+}
+el("talep-cancel").addEventListener("click", ()=> el("modal-talep").hidden = true);
+
+el("talep-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  const btn = el("talep-save");
+  btn.disabled = true;
+  const payload = {
+    numune_id: talepForNumuneId,
+    not: el("t-not").value.trim() || null,
+  };
+
+  const res = await fetch("/api/talepler", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  btn.disabled = false;
+
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("talep-form-error");
+    if(res.status === 409){
+      e.textContent = "Bu numune için zaten bekleyen bir talep var.";
+    } else if(res.status === 403){
+      e.textContent = "Bu işlem için yetkiniz yok.";
+    } else {
+      e.textContent = "Talep gönderilemedi: " + (data.error || res.status);
+    }
+    e.hidden = false;
+    return;
+  }
+  el("modal-talep").hidden = true;
+  showToast("Talebiniz gönderildi.");
   await loadNumuneler();
 });
 
