@@ -17,27 +17,57 @@ export async function onRequestPost(context) {
   if (user.rol !== "editor") return json({ error: "forbidden" }, 403);
 
   const body = await context.request.json().catch(() => null);
-  if (!body || !body.numune_adi || !body.modelhaneden_gelis_tarihi) {
-    return json({ error: "Numune adı ve geliş tarihi zorunludur." }, 400);
+  const numune_adi = (body?.numune_adi || "").trim();
+  const musteri = (body?.musteri || "").trim();
+  const model_siparis_no = (body?.model_siparis_no || "").trim();
+  const renk = (body?.renk || "").trim();
+  const beden = (body?.beden || "").trim();
+  const modelhaneden_gelis_tarihi = (body?.modelhaneden_gelis_tarihi || "").trim();
+  const aciklama = (body?.aciklama || "").trim();
+
+  if (!numune_adi || !musteri || !model_siparis_no || !renk || !beden || !modelhaneden_gelis_tarihi) {
+    return json(
+      { error: "Numune adı, müşteri, model/sipariş no, renk, beden ve geliş tarihi zorunludur." },
+      400
+    );
+  }
+
+  // Ayni musteri + model/siparis no + renk kombinasyonuyla zaten bir kayit
+  // varsa coklamayi engelle (buyuk/kucuk harf ve bosluk farki gozetilmez).
+  const existing = await context.env.DB
+    .prepare(
+      `SELECT id, numune_adi FROM numuneler
+       WHERE lower(trim(musteri)) = lower(?)
+         AND lower(trim(model_siparis_no)) = lower(?)
+         AND lower(trim(renk)) = lower(?)`
+    )
+    .bind(musteri, model_siparis_no, renk)
+    .first();
+  if (existing) {
+    return json(
+      {
+        error: `Bu müşteri, model/sipariş no ve renk kombinasyonuyla zaten bir kayıt var: "${existing.numune_adi}"`,
+      },
+      409
+    );
   }
 
   const id = newId();
   await context.env.DB
     .prepare(
       `INSERT INTO numuneler
-        (id, kod, numune_adi, musteri, model_siparis_no, renk, beden, modelhaneden_gelis_tarihi, aciklama, olusturan_email)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, numune_adi, musteri, model_siparis_no, renk, beden, modelhaneden_gelis_tarihi, aciklama, olusturan_email)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
-      body.kod || null,
-      body.numune_adi,
-      body.musteri || null,
-      body.model_siparis_no || null,
-      body.renk || null,
-      body.beden || null,
-      body.modelhaneden_gelis_tarihi,
-      body.aciklama || null,
+      numune_adi,
+      musteri,
+      model_siparis_no,
+      renk,
+      beden,
+      modelhaneden_gelis_tarihi,
+      aciklama || null,
       user.email
     )
     .run();
