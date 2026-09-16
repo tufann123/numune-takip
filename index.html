@@ -62,7 +62,7 @@
 
   label{
     display:block;
-    font-size:var(--fs-sm);
+    font-size:var(--fs-base);
     font-weight:600;
     margin-bottom:6px;
     color:var(--text);
@@ -365,7 +365,7 @@
               <th>Numune Adı</th>
               <th>Müşteri</th>
               <th>Model / Sipariş No</th>
-              <th>Renk / Beden</th>
+              <th>Renk</th>
               <th>Modelhaneden Geliş</th>
               <th>Durum</th>
               <th>Talep</th>
@@ -410,16 +410,8 @@
           <input type="date" id="f-gelis-tarihi" required />
         </div>
       </div>
-      <div class="form-row-2">
-        <div>
-          <label>Renk *</label>
-          <input type="text" id="f-renk" required />
-        </div>
-        <div>
-          <label>Beden *</label>
-          <input type="text" id="f-beden" required />
-        </div>
-      </div>
+      <label>Renk *</label>
+      <input type="text" id="f-renk" required />
       <label>Açıklama</label>
       <textarea id="f-aciklama"></textarea>
       <div class="modal-actions">
@@ -450,16 +442,8 @@
       </div>
       <label>Kime Verildi (ekip / atölye / kişi) *</label>
       <input type="text" id="d-kime" required />
-      <div class="form-row-2">
-        <div>
-          <label>Miktar / Adet (opsiyonel)</label>
-          <input type="text" id="d-miktar" />
-        </div>
-        <div>
-          <label>Not</label>
-          <input type="text" id="d-not" />
-        </div>
-      </div>
+      <label>Not</label>
+      <input type="text" id="d-not" />
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="dagitim-cancel">Vazgeç</button>
         <button type="submit" class="btn-primary" id="dagitim-save">Kaydet</button>
@@ -644,7 +628,7 @@ function pendingTalepFor(numuneId){
 
 function matchesSearch(n){
   if(!searchTerm) return true;
-  const hay = [n.numune_adi, n.musteri, n.model_siparis_no, n.renk, n.beden]
+  const hay = [n.numune_adi, n.musteri, n.model_siparis_no, n.renk]
     .filter(Boolean).join(" ").toLowerCase();
   return hay.includes(searchTerm.toLowerCase());
 }
@@ -680,7 +664,7 @@ function renderTable(){
       <td><strong>${escapeHtml(n.numune_adi)}</strong></td>
       <td>${escapeHtml(n.musteri || "-")}</td>
       <td>${escapeHtml(n.model_siparis_no || "-")}</td>
-      <td>${escapeHtml([n.renk, n.beden].filter(Boolean).join(" / ") || "-")}</td>
+      <td>${escapeHtml(n.renk || "-")}</td>
       <td>${fmtDate(n.modelhaneden_gelis_tarihi)}</td>
       <td>${statusHtml}</td>
       <td>${talepHtml}</td>
@@ -790,7 +774,7 @@ function renderDetail(n){
     const table = document.createElement("table");
     table.className = "dist-table";
     table.innerHTML = `
-      <thead><tr><th>Tarih</th><th>Tip</th><th>Kime Verildi</th><th>Miktar</th><th>Not</th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Tip</th><th>Kime Verildi</th><th>Not</th></tr></thead>
     `;
     const tb = document.createElement("tbody");
     n.dagitimlar.forEach(d=>{
@@ -801,7 +785,6 @@ function renderDetail(n){
         <td>${fmtDate(d.dagitim_tarihi)}</td>
         <td class="${tipClass}">${tipLabel}</td>
         <td>${escapeHtml(d.kime)}</td>
-        <td>${escapeHtml(d.miktar || "-")}</td>
         <td>${escapeHtml(d.not_ || "-")}</td>
       `;
       tb.appendChild(row);
@@ -931,7 +914,6 @@ el("numune-form").addEventListener("submit", async (ev)=>{
     musteri: musteri,
     model_siparis_no: el("f-model-siparis").value.trim(),
     renk: el("f-renk").value.trim(),
-    beden: el("f-beden").value.trim(),
     aciklama: el("f-aciklama").value.trim() || null,
   };
 
@@ -982,7 +964,6 @@ el("dagitim-form").addEventListener("submit", async (ev)=>{
     dagitim_tarihi: el("d-tarih").value,
     tip: el("d-tip").value,
     kime: el("d-kime").value.trim(),
-    miktar: el("d-miktar").value.trim() || null,
     not: el("d-not").value.trim() || null,
   };
 
