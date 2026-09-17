@@ -60,3 +60,25 @@ export async function onRequestPut(context) {
 
   return json({ ok: true });
 }
+
+export async function onRequestDelete(context) {
+  const user = await getUser(context);
+  if (!user) return json({ error: "unauthenticated" }, 401);
+  if (user.rol !== "editor") return json({ error: "forbidden" }, 403);
+
+  const id = context.params.id;
+
+  const existingRow = await context.env.DB
+    .prepare("SELECT id FROM numuneler WHERE id = ?")
+    .bind(id)
+    .first();
+  if (!existingRow) return json({ error: "Numune bulunamadı." }, 404);
+
+  await context.env.DB.batch([
+    context.env.DB.prepare("DELETE FROM talepler WHERE numune_id = ?").bind(id),
+    context.env.DB.prepare("DELETE FROM dagitimlar WHERE numune_id = ?").bind(id),
+    context.env.DB.prepare("DELETE FROM numuneler WHERE id = ?").bind(id),
+  ]);
+
+  return json({ ok: true });
+}
