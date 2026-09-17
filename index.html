@@ -90,6 +90,8 @@
   .btn-primary:hover{background:var(--primary-dark);}
   .btn-secondary{background:#eceef1;color:var(--text);}
   .btn-secondary:hover{background:#dfe2e7;}
+  .btn-danger{background:var(--danger);color:#fff;}
+  .btn-danger:hover{background:#8f332f;}
   .btn-block{width:100%;}
   .error-msg{
     background:#fbeceb;
@@ -428,6 +430,7 @@
       <label>Açıklama</label>
       <textarea id="f-aciklama"></textarea>
       <div class="modal-actions">
+        <button type="button" class="btn-danger" id="numune-delete" style="margin-right:auto" hidden>Sil</button>
         <button type="button" class="btn-secondary" id="numune-cancel">Vazgeç</button>
         <button type="submit" class="btn-primary" id="numune-save">Kaydet</button>
       </div>
@@ -899,10 +902,42 @@ el("open-new-numune").addEventListener("click", async ()=>{
   el("numune-form-error").hidden = true;
   el("numune-modal-title").textContent = "Yeni Numune / Kartela";
   el("numune-save").textContent = "Kaydet";
+  el("numune-delete").hidden = true;
   await loadMusteriler();
   el("modal-numune").hidden = false;
 });
 el("numune-cancel").addEventListener("click", ()=> { el("modal-numune").hidden = true; editingNumuneId = null; });
+
+el("numune-delete").addEventListener("click", async ()=>{
+  if(!editingNumuneId) return;
+  const onay = confirm("Bu numune / kartela kaydini ve varsa tum dagitim gecmisini kalici olarak silmek istediginize emin misiniz? Bu islem geri alinamaz.");
+  if(!onay) return;
+  const delBtn = el("numune-delete");
+  delBtn.disabled = true;
+  const res = await fetch(`/api/numuneler/${encodeURIComponent(editingNumuneId)}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  delBtn.disabled = false;
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("numune-form-error");
+    if(res.status === 403){
+      e.textContent = "Bu islem icin yetkiniz yok.";
+    } else if(res.status === 404){
+      e.textContent = "Kayit bulunamadi (zaten silinmis olabilir).";
+    } else {
+      e.textContent = "Silinemedi: " + (data.error || res.status);
+    }
+    e.hidden = false;
+    return;
+  }
+  el("modal-numune").hidden = true;
+  showToast("Numune silindi.");
+  editingNumuneId = null;
+  openDetailId = null;
+  await loadNumuneler();
+});
 
 async function openEditNumuneModal(n){
   editingNumuneId = n.id;
@@ -911,6 +946,7 @@ async function openEditNumuneModal(n){
   el("musteri-yeni-wrap").hidden = true;
   el("numune-modal-title").textContent = "Numune / Kartela Düzenle";
   el("numune-save").textContent = "Güncelle";
+  el("numune-delete").hidden = false;
 
   await loadMusteriler();
   const sel = el("f-musteri");
