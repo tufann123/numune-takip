@@ -686,8 +686,8 @@ function renderTable(){
     tr.innerHTML = `
       <td><strong>${escapeHtml(formatAdi(n.numune_adi))}</strong></td>
       <td>${escapeHtml(n.musteri || "-")}</td>
-      <td>${escapeHtml(n.model_siparis_no || "-")}</td>
-      <td>${escapeHtml(n.renk || "-")}</td>
+      <td>${escapeHtml(formatAdi(n.model_siparis_no) || "-")}</td>
+      <td>${escapeHtml(formatAdi(n.renk) || "-")}</td>
       <td>${fmtDate(n.modelhaneden_gelis_tarihi)}</td>
       <td>${statusHtml}</td>
       <td>${talepHtml}</td>
@@ -1014,8 +1014,8 @@ el("numune-form").addEventListener("submit", async (ev)=>{
     numune_adi: formatAdi(el("f-numune-adi").value.trim()),
     modelhaneden_gelis_tarihi: el("f-gelis-tarihi").value,
     musteri: musteri,
-    model_siparis_no: el("f-model-siparis").value.trim(),
-    renk: el("f-renk").value.trim(),
+    model_siparis_no: formatAdi(el("f-model-siparis").value.trim()),
+    renk: formatAdi(el("f-renk").value.trim()),
     aciklama: el("f-aciklama").value.trim() || null,
   };
 
