@@ -213,6 +213,7 @@
   .status-bekliyor{background:#fdf1e2;color:#8a5a12;}
   .status-dagitildi{background:#e6f0ea;color:var(--primary-dark);}
   .status-talep{background:#fde8e6;color:#9c3a2f;}
+  .status-pill .status-sub{font-weight:500;opacity:.85;margin-left:2px;}
 
   .talep-card{
     background:#fff8ef;
@@ -303,6 +304,30 @@
   .dist-table th{background:transparent;color:var(--muted);font-size:var(--fs-xs);}
   .tip-uretim{color:var(--primary-dark);font-weight:700;}
   .tip-fason{color:var(--accent);font-weight:700;}
+  .badge-pps{
+    display:inline-block;
+    margin-left:8px;
+    padding:2px 8px;
+    border-radius:999px;
+    background:var(--accent);
+    color:#fff;
+    font-size:var(--fs-xs);
+    font-weight:700;
+    vertical-align:middle;
+  }
+  .checkbox-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-weight:600;
+    margin-bottom:16px;
+    cursor:pointer;
+  }
+  .checkbox-row input[type=checkbox]{
+    width:auto;
+    margin:0;
+    cursor:pointer;
+  }
   .empty-note{color:var(--muted);font-size:var(--fs-sm);padding:10px 0;}
   .detail-title{font-weight:700;font-size:var(--fs-base);margin-bottom:8px;}
   .musteri-yeni-wrap{margin-top:-8px;}
@@ -456,6 +481,7 @@
       </div>
       <label>Renk *</label>
       <input type="text" id="f-renk" required />
+      <label class="checkbox-row"><input type="checkbox" id="f-pps" /> Bu numune PPS numunesidir</label>
       <label>Açıklama</label>
       <textarea id="f-aciklama"></textarea>
       <div class="modal-actions">
@@ -492,6 +518,23 @@
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="dagitim-cancel">Vazgeç</button>
         <button type="submit" class="btn-primary" id="dagitim-save">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-iade" hidden>
+  <div class="modal">
+    <h2>Kesimhaneye Geri Al</h2>
+    <div id="iade-form-error" class="error-msg" hidden></div>
+    <form id="iade-form">
+      <label>İade Tarihi *</label>
+      <input type="date" id="i-tarih" required />
+      <label>Not</label>
+      <input type="text" id="i-not" />
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="iade-cancel">Vazgeç</button>
+        <button type="submit" class="btn-primary" id="iade-save">Kaydet</button>
       </div>
     </form>
   </div>
@@ -708,9 +751,16 @@ function renderTable(){
   tbody.innerHTML = "";
   filtered.forEach(n=>{
     const count = n.dagitimlar.length;
-    const statusHtml = count === 0
-      ? `<span class="status-pill status-bekliyor">Kesimhanede</span>`
-      : `<span class="status-pill status-dagitildi">Dağıtıldı (${count})</span>`;
+    const son = count > 0 ? n.dagitimlar[0] : null;
+    let statusHtml;
+    if(count === 0){
+      statusHtml = `<span class="status-pill status-bekliyor">Kesimhanede</span>`;
+    } else if(son.iade_tarihi){
+      statusHtml = `<span class="status-pill status-bekliyor">Kesimhanede <span class="status-sub">(iade: ${fmtDate(son.iade_tarihi)})</span></span>`;
+    } else {
+      const sonTipLabel = son.tip === "uretim" ? "Üretim" : "Fason";
+      statusHtml = `<span class="status-pill status-dagitildi">Dışarıda <span class="status-sub">(${escapeHtml(sonTipLabel)} · ${fmtDate(son.dagitim_tarihi)})</span></span>`;
+    }
 
     const pending = pendingTalepFor(n.id);
     let talepHtml = "-";
@@ -723,7 +773,7 @@ function renderTable(){
     const tr = document.createElement("tr");
     tr.className = "row-clickable";
     tr.innerHTML = `
-      <td><strong>${escapeHtml(formatAdi(n.numune_adi))}</strong></td>
+      <td><strong>${escapeHtml(formatAdi(n.numune_adi))}</strong>${n.pps_numunesi ? '<span class="badge-pps">PPS</span>' : ''}</td>
       <td>${escapeHtml(n.musteri || "-")}</td>
       <td>${escapeHtml(formatAdi(n.model_siparis_no) || "-")}</td>
       <td>${escapeHtml(formatAdi(n.renk) || "-")}</td>
@@ -836,23 +886,34 @@ function renderDetail(n){
     const table = document.createElement("table");
     table.className = "dist-table";
     table.innerHTML = `
-      <thead><tr><th>Tarih</th><th>Tip</th><th>Kime Verildi</th><th>Not</th></tr></thead>
+      <thead><tr><th>Çıkış Tarihi</th><th>Tip</th><th>Kime Verildi</th><th>İade Tarihi</th><th>Not</th></tr></thead>
     `;
     const tb = document.createElement("tbody");
-    n.dagitimlar.forEach(d=>{
+    n.dagitimlar.forEach((d, idx)=>{
       const row = document.createElement("tr");
       const tipClass = d.tip === "uretim" ? "tip-uretim" : "tip-fason";
       const tipLabel = d.tip === "uretim" ? "Üretim" : "Fason";
+      const canReturn = idx === 0 && !d.iade_tarihi && currentUser?.rol === "editor";
+      const iadeCell = d.iade_tarihi
+        ? escapeHtml(fmtDate(d.iade_tarihi)) + (d.iade_notu ? ` <span class="empty-note">(${escapeHtml(d.iade_notu)})</span>` : "")
+        : (canReturn ? `<button type="button" class="btn-secondary btn-small btn-iade-al" data-id="${escapeHtml(d.id)}">Geri Al</button>` : "-");
       row.innerHTML = `
         <td>${fmtDate(d.dagitim_tarihi)}</td>
         <td class="${tipClass}">${tipLabel}</td>
         <td>${escapeHtml(d.kime)}</td>
+        <td>${iadeCell}</td>
         <td>${escapeHtml(d.not_ || "-")}</td>
       `;
       tb.appendChild(row);
     });
     table.appendChild(tb);
     wrap.appendChild(table);
+    wrap.querySelectorAll(".btn-iade-al").forEach(btn=>{
+      btn.addEventListener("click", (ev)=>{
+        ev.stopPropagation();
+        openIadeModal(btn.dataset.id);
+      });
+    });
   }
 
   if(currentUser?.rol === "editor"){
@@ -990,6 +1051,7 @@ el("open-new-numune").addEventListener("click", async ()=>{
   editingNumuneId = null;
   el("numune-form").reset();
   el("f-gelis-tarihi").value = todayStr();
+  el("f-pps").checked = false;
   el("musteri-yeni-wrap").hidden = true;
   el("numune-form-error").hidden = true;
   el("numune-modal-title").textContent = "Yeni Numune / Kartela";
@@ -1055,6 +1117,7 @@ async function openEditNumuneModal(n){
   el("f-gelis-tarihi").value = n.modelhaneden_gelis_tarihi || "";
   el("f-renk").value = n.renk || "";
   el("f-aciklama").value = n.aciklama || "";
+  el("f-pps").checked = !!n.pps_numunesi;
 
   el("modal-numune").hidden = false;
 }
@@ -1109,6 +1172,7 @@ el("numune-form").addEventListener("submit", async (ev)=>{
     model_siparis_no: formatAdi(el("f-model-siparis").value.trim()),
     renk: formatAdi(el("f-renk").value.trim()),
     aciklama: el("f-aciklama").value.trim() || null,
+    pps_numunesi: el("f-pps").checked ? 1 : 0,
   };
 
   const isEdit = !!editingNumuneId;
@@ -1185,6 +1249,50 @@ el("dagitim-form").addEventListener("submit", async (ev)=>{
   }
   el("modal-dagitim").hidden = true;
   showToast("Dağıtım kaydedildi.");
+  await loadNumuneler();
+});
+
+/* ------------------------- IADE (KESIMHANEYE GERI ALMA) ------------------------- */
+
+let iadeForDagitimId = null;
+
+function openIadeModal(dagitimId){
+  iadeForDagitimId = dagitimId;
+  el("iade-form").reset();
+  el("i-tarih").value = todayStr();
+  el("iade-form-error").hidden = true;
+  el("modal-iade").hidden = false;
+}
+el("iade-cancel").addEventListener("click", ()=> el("modal-iade").hidden = true);
+
+el("iade-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  const btn = el("iade-save");
+  btn.disabled = true;
+  const payload = {
+    iade_tarihi: el("i-tarih").value,
+    iade_notu: el("i-not").value.trim() || null,
+  };
+
+  const res = await fetch(`/api/dagitimlar/${encodeURIComponent(iadeForDagitimId)}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  btn.disabled = false;
+
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("iade-form-error");
+    e.textContent = res.status === 403
+      ? "Bu işlem için yetkiniz yok."
+      : "Kaydedilemedi: " + (data.error || res.status);
+    e.hidden = false;
+    return;
+  }
+  el("modal-iade").hidden = true;
+  showToast("Numune kesimhaneye geri alındı olarak işaretlendi.");
   await loadNumuneler();
 });
 
