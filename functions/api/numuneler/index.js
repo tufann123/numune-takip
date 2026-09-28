@@ -51,12 +51,14 @@ export async function onRequestPost(context) {
     );
   }
 
+  const pps_numunesi = body?.pps_numunesi ? 1 : 0;
+
   const id = newId();
   await context.env.DB
     .prepare(
       `INSERT INTO numuneler
-        (id, numune_adi, musteri, model_siparis_no, renk, modelhaneden_gelis_tarihi, aciklama, olusturan_email)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, numune_adi, musteri, model_siparis_no, renk, modelhaneden_gelis_tarihi, aciklama, olusturan_email, pps_numunesi)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id,
@@ -66,7 +68,8 @@ export async function onRequestPost(context) {
       renk,
       modelhaneden_gelis_tarihi,
       aciklama || null,
-      user.email
+      user.email,
+      pps_numunesi
     )
     .run();
 
