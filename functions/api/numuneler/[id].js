@@ -49,13 +49,15 @@ export async function onRequestPut(context) {
     );
   }
 
+  const pps_numunesi = body?.pps_numunesi ? 1 : 0;
+
   await context.env.DB
     .prepare(
       `UPDATE numuneler
-       SET numune_adi = ?, musteri = ?, model_siparis_no = ?, renk = ?, modelhaneden_gelis_tarihi = ?, aciklama = ?
+       SET numune_adi = ?, musteri = ?, model_siparis_no = ?, renk = ?, modelhaneden_gelis_tarihi = ?, aciklama = ?, pps_numunesi = ?
        WHERE id = ?`
     )
-    .bind(numune_adi, musteri, model_siparis_no, renk, modelhaneden_gelis_tarihi, aciklama || null, id)
+    .bind(numune_adi, musteri, model_siparis_no, renk, modelhaneden_gelis_tarihi, aciklama || null, pps_numunesi, id)
     .run();
 
   return json({ ok: true });
