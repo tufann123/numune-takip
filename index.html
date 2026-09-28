@@ -242,6 +242,34 @@
     padding:6px 10px;
     font-size:var(--fs-sm);
   }
+  .link-btn{
+    background:none;
+    border:none;
+    color:var(--primary);
+    padding:0;
+    font-weight:600;
+    font-size:var(--fs-sm);
+    text-decoration:underline;
+    cursor:pointer;
+    margin:-10px 0 16px;
+    display:inline-block;
+  }
+  .link-btn:hover{color:var(--primary-dark);}
+  .musteriler-liste{
+    max-height:320px;
+    overflow-y:auto;
+    margin-bottom:16px;
+  }
+  .musteri-satir{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:9px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .musteri-satir:last-child{border-bottom:none;}
+  .musteri-satir span{overflow-wrap:anywhere;}
 
   .detail-row td{
     background:#fbfbfc;
@@ -410,6 +438,7 @@
         <option value="" disabled selected>Seçiniz...</option>
         <option value="__new__">+ Yeni müşteri ekle...</option>
       </select>
+      <button type="button" class="link-btn" id="musteri-yonet-btn">Müşterileri yönet</button>
       <div class="musteri-yeni-wrap" id="musteri-yeni-wrap" hidden>
         <label>Yeni Müşteri Adı *</label>
         <input type="text" id="f-musteri-yeni" placeholder="Müşteri adını yazın" />
@@ -480,6 +509,16 @@
         <button type="submit" class="btn-primary" id="talep-save">Talep Et</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-musteriler" hidden>
+  <div class="modal">
+    <h2>Müşterileri Yönet</h2>
+    <div id="musteriler-liste" class="musteriler-liste"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="musteriler-kapat">Kapat</button>
+    </div>
   </div>
 </div>
 
@@ -885,6 +924,59 @@ async function loadMusteriler(){
     sel.value = "";
   }
 }
+
+async function renderMusterilerListesi(){
+  const wrap = el("musteriler-liste");
+  wrap.innerHTML = "Yükleniyor...";
+  try{
+    const res = await fetch("/api/musteriler", { credentials: "same-origin" });
+    if(!res.ok){ wrap.textContent = "Müşteriler yüklenemedi."; return; }
+    const data = await res.json();
+    const list = data.musteriler || [];
+    wrap.innerHTML = "";
+    if(!list.length){
+      wrap.innerHTML = '<div class="empty-note">Henüz müşteri eklenmemiş.</div>';
+      return;
+    }
+    list.forEach(m=>{
+      const row = document.createElement("div");
+      row.className = "musteri-satir";
+      const name = document.createElement("span");
+      name.textContent = m.ad;
+      row.appendChild(name);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-danger btn-small";
+      btn.textContent = "Sil";
+      btn.addEventListener("click", async ()=>{
+        const onay = confirm(`"${m.ad}" müşterisini silmek istediğinize emin misiniz? Bu müşteriye ait mevcut numune kayıtları etkilenmez, sadece seçim listesinden kaldırılır.`);
+        if(!onay) return;
+        btn.disabled = true;
+        const delRes = await fetch(`/api/musteriler/${encodeURIComponent(m.id)}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+        });
+        if(!delRes.ok){
+          const d = await delRes.json().catch(()=>({}));
+          alert("Silinemedi: " + (d.error || delRes.status));
+          btn.disabled = false;
+          return;
+        }
+        await renderMusterilerListesi();
+        await loadMusteriler();
+      });
+      row.appendChild(btn);
+      wrap.appendChild(row);
+    });
+  } catch(err){
+    wrap.textContent = "Müşteriler yüklenemedi.";
+  }
+}
+el("musteri-yonet-btn").addEventListener("click", async ()=>{
+  el("modal-musteriler").hidden = false;
+  await renderMusterilerListesi();
+});
+el("musteriler-kapat").addEventListener("click", ()=> el("modal-musteriler").hidden = true);
 
 el("f-musteri").addEventListener("change", ()=>{
   const isNew = el("f-musteri").value === "__new__";
