@@ -213,6 +213,7 @@
   .status-bekliyor{background:#fdf1e2;color:#8a5a12;}
   .status-dagitildi{background:#e6f0ea;color:var(--primary-dark);}
   .status-talep{background:#fde8e6;color:#9c3a2f;}
+  .status-temsilci{background:#eaf1fb;color:#2c5aa0;}
   .status-pill .status-sub{font-weight:500;opacity:.85;margin-left:2px;}
 
   .talep-card{
@@ -239,6 +240,9 @@
   .talep-row:last-child{border-bottom:none;}
   .talep-row .talep-info{flex:1;min-width:200px;}
   .talep-row .talep-note{color:var(--muted);font-size:var(--fs-sm);}
+  .talep-card.temsilci-card{background:#eaf1fb;border-color:#c3d9f5;}
+  .talep-card.temsilci-card h2{color:#2c5aa0;}
+  .talep-card.temsilci-card .talep-row{border-bottom-color:#d7e6f9;}
   .btn-small{
     padding:6px 10px;
     font-size:var(--fs-sm);
@@ -418,6 +422,11 @@
       <div id="talep-list"></div>
     </div>
 
+    <div class="talep-card temsilci-card" id="temsilci-iade-panel" hidden>
+      <h2>Müşteri Temsilcisine İade Onayları</h2>
+      <div id="temsilci-iade-list"></div>
+    </div>
+
     <div class="toolbar">
       <input type="text" id="search-input" placeholder="Ara: numune adı, müşteri, model..." />
       <span class="count-pill" id="count-pill"></span>
@@ -436,7 +445,7 @@
               <th>Renk</th>
               <th>Modelhaneden Geliş</th>
               <th>Durum</th>
-              <th>Talep</th>
+              <th>Aksiyon</th>
             </tr>
           </thead>
           <tbody id="numune-tbody">
@@ -555,6 +564,22 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-temsilci-iade" hidden>
+  <div class="modal">
+    <h2>Müşteri Temsilcisine İade</h2>
+    <div id="temsilci-iade-form-error" class="error-msg" hidden></div>
+    <form id="temsilci-iade-form">
+      <p class="hint" style="margin:0 0 16px;">Bu numuneyi müşteri temsilcisine iade ettiğinizi bildiriyorsunuz. Onay için düzenleyiciye gönderilecek.</p>
+      <label>Not (opsiyonel)</label>
+      <textarea id="ti-not" placeholder="Örn: hangi temsilciye, ne zaman..."></textarea>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="temsilci-iade-cancel">Vazgeç</button>
+        <button type="submit" class="btn-primary" id="temsilci-iade-save">Gönder</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-musteriler" hidden>
   <div class="modal">
     <h2>Müşterileri Yönet</h2>
@@ -569,6 +594,7 @@
 let currentUser = null;   // { email, ad_soyad, rol }
 let numuneler = [];
 let talepler = [];
+let temsilciIadeleri = [];
 let musteriListesi = [];
 let openDetailId = null;
 let searchTerm = "";
@@ -699,10 +725,11 @@ el("logout-btn").addEventListener("click", async ()=>{
 async function loadNumuneler(){
   el("numune-tbody").innerHTML = `<tr><td colspan="7" class="empty-note">Yükleniyor...</td></tr>`;
 
-  const [numRes, distRes, talepRes] = await Promise.all([
+  const [numRes, distRes, talepRes, temsilciRes] = await Promise.all([
     fetch("/api/numuneler", { credentials: "same-origin" }),
     fetch("/api/dagitimlar", { credentials: "same-origin" }),
     fetch("/api/talepler", { credentials: "same-origin" }),
+    fetch("/api/temsilci-iade", { credentials: "same-origin" }),
   ]);
 
   if(!numRes.ok){
@@ -713,6 +740,7 @@ async function loadNumuneler(){
   const { numuneler: nums } = await numRes.json();
   const { dagitimlar: dists } = distRes.ok ? await distRes.json() : { dagitimlar: [] };
   const { talepler: taleps } = talepRes.ok ? await talepRes.json() : { talepler: [] };
+  const { temsilci_iadeleri: temsilciData } = temsilciRes.ok ? await temsilciRes.json() : { temsilci_iadeleri: [] };
 
   const distsByNumune = {};
   (dists || []).forEach(d=>{
@@ -721,12 +749,18 @@ async function loadNumuneler(){
 
   numuneler = (nums || []).map(n => ({...n, dagitimlar: distsByNumune[n.id] || []}));
   talepler = taleps || [];
+  temsilciIadeleri = temsilciData || [];
   renderTable();
   renderPendingTalepler();
+  renderPendingTemsilciIadeleri();
 }
 
 function pendingTalepFor(numuneId){
   return talepler.find(t => t.numune_id === numuneId && t.durum === "bekliyor") || null;
+}
+
+function pendingTemsilciIadeFor(dagitimId){
+  return temsilciIadeleri.find(t => t.dagitim_id === dagitimId && t.durum === "bekliyor") || null;
 }
 
 /* ------------------------- GORUNTULEME ------------------------- */
@@ -752,11 +786,14 @@ function renderTable(){
   filtered.forEach(n=>{
     const count = n.dagitimlar.length;
     const son = count > 0 ? n.dagitimlar[0] : null;
+    const pendingTemsilci = son ? pendingTemsilciIadeFor(son.id) : null;
     let statusHtml;
     if(count === 0){
       statusHtml = `<span class="status-pill status-bekliyor">Kesimhanede</span>`;
     } else if(son.iade_tarihi){
-      statusHtml = `<span class="status-pill status-bekliyor">Kesimhanede <span class="status-sub">(iade: ${fmtDate(son.iade_tarihi)})</span></span>`;
+      const hedefLabel = son.iade_hedef === "musteri_temsilcisi" ? "Müşteri Temsilciliğinde" : "Kesimhanede";
+      const hedefClass = son.iade_hedef === "musteri_temsilcisi" ? "status-temsilci" : "status-bekliyor";
+      statusHtml = `<span class="status-pill ${hedefClass}">${hedefLabel} <span class="status-sub">(${fmtDate(son.iade_tarihi)})</span></span>`;
     } else {
       const sonTipLabel = son.tip === "uretim" ? "Üretim" : "Fason";
       statusHtml = `<span class="status-pill status-dagitildi">Dışarıda <span class="status-sub">(${escapeHtml(sonTipLabel)} · ${fmtDate(son.dagitim_tarihi)})</span></span>`;
@@ -764,10 +801,14 @@ function renderTable(){
 
     const pending = pendingTalepFor(n.id);
     let talepHtml = "-";
-    if(pending){
+    if(pendingTemsilci){
+      talepHtml = `<span class="status-pill status-temsilci">Temsilciye İade Onayı Bekliyor</span>`;
+    } else if(pending){
       talepHtml = `<span class="status-pill status-talep">Talep Edildi</span>`;
     } else if(count === 0 && currentUser?.rol !== "editor"){
       talepHtml = `<button type="button" class="btn-secondary btn-small btn-talep-et" data-id="${escapeHtml(n.id)}">Talep Et</button>`;
+    } else if(count > 0 && son && !son.iade_tarihi && currentUser?.rol !== "editor"){
+      talepHtml = `<button type="button" class="btn-secondary btn-small btn-temsilci-iade" data-id="${escapeHtml(son.id)}">Müşteri Temsilcisine İade Edildi</button>`;
     }
 
     const tr = document.createElement("tr");
@@ -782,7 +823,7 @@ function renderTable(){
       <td>${talepHtml}</td>
     `;
     tr.addEventListener("click", (ev)=>{
-      if(ev.target.closest(".btn-talep-et")) return;
+      if(ev.target.closest(".btn-talep-et") || ev.target.closest(".btn-temsilci-iade")) return;
       toggleDetail(n.id);
     });
     const talepBtn = tr.querySelector(".btn-talep-et");
@@ -790,6 +831,13 @@ function renderTable(){
       talepBtn.addEventListener("click", (ev)=>{
         ev.stopPropagation();
         openTalepModal(n.id);
+      });
+    }
+    const temsilciBtn = tr.querySelector(".btn-temsilci-iade");
+    if(temsilciBtn){
+      temsilciBtn.addEventListener("click", (ev)=>{
+        ev.stopPropagation();
+        openTemsilciIadeModal(temsilciBtn.dataset.id);
       });
     }
     tbody.appendChild(tr);
@@ -861,6 +909,85 @@ function renderPendingTalepler(){
   });
 }
 
+function renderPendingTemsilciIadeleri(){
+  const panel = el("temsilci-iade-panel");
+  if(currentUser?.rol !== "editor"){
+    panel.hidden = true;
+    return;
+  }
+  const pending = temsilciIadeleri.filter(t => t.durum === "bekliyor");
+  if(pending.length === 0){
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  const list = el("temsilci-iade-list");
+  list.innerHTML = "";
+  pending.forEach(t=>{
+    const n = numuneler.find(x => (x.dagitimlar || []).some(d => d.id === t.dagitim_id));
+    const row = document.createElement("div");
+    row.className = "talep-row";
+    row.innerHTML = `
+      <div class="talep-info">
+        <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}<br/>
+        <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDate(t.created_at)} tarihinde müşteri temsilcisine iade edildiği bildirildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
+      </div>
+    `;
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+
+    const btnOnayla = document.createElement("button");
+    btnOnayla.type = "button";
+    btnOnayla.className = "btn-primary btn-small";
+    btnOnayla.textContent = "Onayla";
+    btnOnayla.addEventListener("click", async ()=>{
+      btnOnayla.disabled = true;
+      const res = await fetch(`/api/temsilci-iade/${encodeURIComponent(t.id)}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ karar: "onayla" }),
+      });
+      if(!res.ok){
+        btnOnayla.disabled = false;
+        alert("Onaylanamadı, tekrar deneyin.");
+        return;
+      }
+      showToast("Numune müşteri temsilciliğinde olarak işaretlendi.");
+      await loadNumuneler();
+    });
+    actions.appendChild(btnOnayla);
+
+    const btnReddet = document.createElement("button");
+    btnReddet.type = "button";
+    btnReddet.className = "btn-secondary btn-small";
+    btnReddet.textContent = "Reddet";
+    btnReddet.addEventListener("click", async ()=>{
+      const onay = confirm("Bu iade bildirimini reddetmek istediğinize emin misiniz?");
+      if(!onay) return;
+      btnReddet.disabled = true;
+      const res = await fetch(`/api/temsilci-iade/${encodeURIComponent(t.id)}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ karar: "reddet" }),
+      });
+      if(!res.ok){
+        btnReddet.disabled = false;
+        alert("Reddedilemedi, tekrar deneyin.");
+        return;
+      }
+      showToast("İade bildirimi reddedildi.");
+      await loadNumuneler();
+    });
+    actions.appendChild(btnReddet);
+
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
 function renderDetail(n){
   const wrap = document.createElement("div");
 
@@ -893,10 +1020,14 @@ function renderDetail(n){
       const row = document.createElement("tr");
       const tipClass = d.tip === "uretim" ? "tip-uretim" : "tip-fason";
       const tipLabel = d.tip === "uretim" ? "Üretim" : "Fason";
-      const canReturn = idx === 0 && !d.iade_tarihi && currentUser?.rol === "editor";
+      const pendingTemsilciRow = idx === 0 ? pendingTemsilciIadeFor(d.id) : null;
+      const canReturn = idx === 0 && !d.iade_tarihi && !pendingTemsilciRow && currentUser?.rol === "editor";
+      const hedefNote = d.iade_hedef === "musteri_temsilcisi" ? " · Müşteri Temsilciliği" : "";
       const iadeCell = d.iade_tarihi
-        ? escapeHtml(fmtDate(d.iade_tarihi)) + (d.iade_notu ? ` <span class="empty-note">(${escapeHtml(d.iade_notu)})</span>` : "")
-        : (canReturn ? `<button type="button" class="btn-secondary btn-small btn-iade-al" data-id="${escapeHtml(d.id)}">Geri Al</button>` : "-");
+        ? escapeHtml(fmtDate(d.iade_tarihi)) + hedefNote + (d.iade_notu ? ` <span class="empty-note">(${escapeHtml(d.iade_notu)})</span>` : "")
+        : (pendingTemsilciRow
+            ? `<span class="empty-note">Temsilciye iade onayı bekleniyor</span>`
+            : (canReturn ? `<button type="button" class="btn-secondary btn-small btn-iade-al" data-id="${escapeHtml(d.id)}">Geri Al</button>` : "-"));
       row.innerHTML = `
         <td>${fmtDate(d.dagitim_tarihi)}</td>
         <td class="${tipClass}">${tipLabel}</td>
@@ -1340,6 +1471,51 @@ el("talep-form").addEventListener("submit", async (ev)=>{
   }
   el("modal-talep").hidden = true;
   showToast("Talebiniz gönderildi.");
+  await loadNumuneler();
+});
+
+/* ------------------------- MUSTERI TEMSILCISINE IADE ------------------------- */
+
+let temsilciIadeForDagitimId = null;
+
+function openTemsilciIadeModal(dagitimId){
+  temsilciIadeForDagitimId = dagitimId;
+  el("temsilci-iade-form").reset();
+  el("temsilci-iade-form-error").hidden = true;
+  el("modal-temsilci-iade").hidden = false;
+}
+el("temsilci-iade-cancel").addEventListener("click", ()=> el("modal-temsilci-iade").hidden = true);
+
+el("temsilci-iade-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  const btn = el("temsilci-iade-save");
+  btn.disabled = true;
+  const payload = {
+    dagitim_id: temsilciIadeForDagitimId,
+    not: el("ti-not").value.trim() || null,
+  };
+
+  const res = await fetch("/api/temsilci-iade", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  btn.disabled = false;
+
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("temsilci-iade-form-error");
+    if(res.status === 409){
+      e.textContent = "Bu dağıtım için zaten bekleyen bir iade onayı var.";
+    } else {
+      e.textContent = "Gönderilemedi: " + (data.error || res.status);
+    }
+    e.hidden = false;
+    return;
+  }
+  el("modal-temsilci-iade").hidden = true;
+  showToast("Bildiriminiz düzenleyiciye onay için gönderildi.");
   await loadNumuneler();
 });
 
