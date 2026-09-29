@@ -22,6 +22,14 @@ export async function onRequestPost(context) {
   if (!body || !body.dagitim_id) {
     return json({ error: "dagitim_id zorunludur." }, 400);
   }
+  const temsilciAdi = (body.temsilci_adi || "").trim();
+  const teslimTarihi = (body.teslim_tarihi || "").trim();
+  if (!temsilciAdi) {
+    return json({ error: "Müşteri temsilcisi zorunludur." }, 400);
+  }
+  if (!teslimTarihi) {
+    return json({ error: "Teslim tarihi zorunludur." }, 400);
+  }
 
   const dagitim = await context.env.DB
     .prepare("SELECT id, iade_tarihi FROM dagitimlar WHERE id = ?")
@@ -43,10 +51,10 @@ export async function onRequestPost(context) {
   const id = newId();
   await context.env.DB
     .prepare(
-      `INSERT INTO temsilci_iade_talepleri (id, dagitim_id, talep_eden_email, talep_eden_ad, not_)
-       VALUES (?, ?, ?, ?, ?)`
+      `INSERT INTO temsilci_iade_talepleri (id, dagitim_id, talep_eden_email, talep_eden_ad, not_, temsilci_adi, teslim_tarihi)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .bind(id, body.dagitim_id, user.email, user.ad_soyad, body.not || null)
+    .bind(id, body.dagitim_id, user.email, user.ad_soyad, body.not || null, temsilciAdi, teslimTarihi)
     .run();
 
   return json({ id }, 201);
