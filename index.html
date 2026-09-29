@@ -605,7 +605,12 @@
 <div class="modal-backdrop" id="modal-temsilciler" hidden>
   <div class="modal">
     <h2>Müşteri Temsilcilerini Yönet</h2>
-    <div id="temsilciler-liste" class="musteriler-liste"></div>
+    <div style="display:flex; gap:8px; align-items:flex-start;">
+      <input type="text" id="temsilci-yeni-ad" placeholder="Yeni temsilci adı" style="flex:1; margin-bottom:0;" />
+      <button type="button" class="btn-primary btn-small" id="temsilci-ekle-btn">Ekle</button>
+    </div>
+    <div id="temsilciler-ekle-error" class="error-msg" hidden style="margin-top:10px;"></div>
+    <div id="temsilciler-liste" class="musteriler-liste" style="margin-top:16px;"></div>
     <div class="modal-actions">
       <button type="button" class="btn-secondary" id="temsilciler-kapat">Kapat</button>
     </div>
@@ -1285,6 +1290,35 @@ el("temsilci-yonet-btn").addEventListener("click", async ()=>{
   await renderTemsilcilerListesi();
 });
 el("temsilciler-kapat").addEventListener("click", ()=> el("modal-temsilciler").hidden = true);
+
+el("temsilci-ekle-btn").addEventListener("click", async ()=>{
+  const input = el("temsilci-yeni-ad");
+  const err = el("temsilciler-ekle-error");
+  err.hidden = true;
+  const ad = input.value.trim();
+  if(!ad){
+    err.textContent = "Temsilci adını yazın.";
+    err.hidden = false;
+    return;
+  }
+  const btn = el("temsilci-ekle-btn");
+  btn.disabled = true;
+  const res = await fetch("/api/temsilciler", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ad }),
+  });
+  btn.disabled = false;
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    err.textContent = "Eklenemedi: " + (data.error || res.status);
+    err.hidden = false;
+    return;
+  }
+  input.value = "";
+  await renderTemsilcilerListesi();
+});
 
 el("ti-temsilci").addEventListener("change", ()=>{
   const isNew = el("ti-temsilci").value === "__new__";
