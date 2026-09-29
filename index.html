@@ -990,7 +990,7 @@ function renderPendingTalepler(){
     row.className = "talep-row";
     row.innerHTML = `
       <div class="talep-info">
-        <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}<br/>
+        <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}${n && n.model_siparis_no ? " · " + escapeHtml(formatAdi(n.model_siparis_no)) : ""}${n && n.renk ? " · " + escapeHtml(formatAdi(n.renk)) : ""}<br/>
         <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDate(t.created_at)} tarihinde talep edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
       </div>
     `;
@@ -1045,7 +1045,7 @@ function renderPendingTemsilciIadeleri(){
     row.className = "talep-row";
     row.innerHTML = `
       <div class="talep-info">
-        <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}<br/>
+        <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}${n && n.model_siparis_no ? " · " + escapeHtml(formatAdi(n.model_siparis_no)) : ""}${n && n.renk ? " · " + escapeHtml(formatAdi(n.renk)) : ""}<br/>
         <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından bildirildi — <strong>${escapeHtml(t.temsilci_adi || "-")}</strong> temsilcisine ${fmtDate(t.teslim_tarihi)} tarihinde teslim edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
       </div>
     `;
