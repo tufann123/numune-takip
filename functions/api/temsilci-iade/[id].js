@@ -29,10 +29,10 @@ export async function onRequestPut(context) {
       context.env.DB
         .prepare(
           `UPDATE dagitimlar
-           SET iade_tarihi = date('now'), iade_hedef = 'musteri_temsilcisi', iade_notu = ?
+           SET iade_tarihi = ?, iade_hedef = 'musteri_temsilcisi', iade_notu = ?, temsilci_adi = ?
            WHERE id = ?`
         )
-        .bind(talep.not_, talep.dagitim_id),
+        .bind(talep.teslim_tarihi || null, talep.not_, talep.temsilci_adi || null, talep.dagitim_id),
       context.env.DB
         .prepare(
           `UPDATE temsilci_iade_talepleri
