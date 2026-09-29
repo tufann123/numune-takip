@@ -570,8 +570,20 @@
     <div id="temsilci-iade-form-error" class="error-msg" hidden></div>
     <form id="temsilci-iade-form">
       <p class="hint" style="margin:0 0 16px;">Bu numuneyi müşteri temsilcisine iade ettiğinizi bildiriyorsunuz. Onay için düzenleyiciye gönderilecek.</p>
+      <label>Müşteri Temsilcisi *</label>
+      <select id="ti-temsilci" required>
+        <option value="" disabled selected>Seçiniz...</option>
+        <option value="__new__">+ Yeni temsilci ekle...</option>
+      </select>
+      <button type="button" class="link-btn" id="temsilci-yonet-btn">Temsilcileri yönet</button>
+      <div class="musteri-yeni-wrap" id="temsilci-yeni-wrap" hidden>
+        <label>Yeni Temsilci Adı *</label>
+        <input type="text" id="ti-temsilci-yeni" placeholder="Temsilci adını yazın" />
+      </div>
+      <label>Teslim Tarihi *</label>
+      <input type="date" id="ti-teslim-tarihi" required />
       <label>Not (opsiyonel)</label>
-      <textarea id="ti-not" placeholder="Örn: hangi temsilciye, ne zaman..."></textarea>
+      <textarea id="ti-not" placeholder="Örn: ek bilgi..."></textarea>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="temsilci-iade-cancel">Vazgeç</button>
         <button type="submit" class="btn-primary" id="temsilci-iade-save">Gönder</button>
@@ -590,12 +602,23 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-temsilciler" hidden>
+  <div class="modal">
+    <h2>Müşteri Temsilcilerini Yönet</h2>
+    <div id="temsilciler-liste" class="musteriler-liste"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="temsilciler-kapat">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let currentUser = null;   // { email, ad_soyad, rol }
 let numuneler = [];
 let talepler = [];
 let temsilciIadeleri = [];
 let musteriListesi = [];
+let temsilciListesi = [];
 let openDetailId = null;
 let searchTerm = "";
 
@@ -791,9 +814,13 @@ function renderTable(){
     if(count === 0){
       statusHtml = `<span class="status-pill status-bekliyor">Kesimhanede</span>`;
     } else if(son.iade_tarihi){
-      const hedefLabel = son.iade_hedef === "musteri_temsilcisi" ? "Müşteri Temsilciliğinde" : "Kesimhanede";
-      const hedefClass = son.iade_hedef === "musteri_temsilcisi" ? "status-temsilci" : "status-bekliyor";
-      statusHtml = `<span class="status-pill ${hedefClass}">${hedefLabel} <span class="status-sub">(${fmtDate(son.iade_tarihi)})</span></span>`;
+      const hedefIsTemsilci = son.iade_hedef === "musteri_temsilcisi";
+      const hedefLabel = hedefIsTemsilci ? "Müşteri Temsilciliğinde" : "Kesimhanede";
+      const hedefClass = hedefIsTemsilci ? "status-temsilci" : "status-bekliyor";
+      const hedefSub = hedefIsTemsilci && son.temsilci_adi
+        ? `${escapeHtml(son.temsilci_adi)} · ${fmtDate(son.iade_tarihi)}`
+        : fmtDate(son.iade_tarihi);
+      statusHtml = `<span class="status-pill ${hedefClass}">${hedefLabel} <span class="status-sub">(${hedefSub})</span></span>`;
     } else {
       const sonTipLabel = son.tip === "uretim" ? "Üretim" : "Fason";
       statusHtml = `<span class="status-pill status-dagitildi">Dışarıda <span class="status-sub">(${escapeHtml(sonTipLabel)} · ${fmtDate(son.dagitim_tarihi)})</span></span>`;
@@ -930,7 +957,7 @@ function renderPendingTemsilciIadeleri(){
     row.innerHTML = `
       <div class="talep-info">
         <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}<br/>
-        <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDate(t.created_at)} tarihinde müşteri temsilcisine iade edildiği bildirildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
+        <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından bildirildi — <strong>${escapeHtml(t.temsilci_adi || "-")}</strong> temsilcisine ${fmtDate(t.teslim_tarihi)} tarihinde teslim edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
       </div>
     `;
     const actions = document.createElement("div");
@@ -1022,7 +1049,9 @@ function renderDetail(n){
       const tipLabel = d.tip === "uretim" ? "Üretim" : "Fason";
       const pendingTemsilciRow = idx === 0 ? pendingTemsilciIadeFor(d.id) : null;
       const canReturn = idx === 0 && !d.iade_tarihi && !pendingTemsilciRow && currentUser?.rol === "editor";
-      const hedefNote = d.iade_hedef === "musteri_temsilcisi" ? " · Müşteri Temsilciliği" : "";
+      const hedefNote = d.iade_hedef === "musteri_temsilcisi"
+        ? ` · Müşteri Temsilciliği${d.temsilci_adi ? " (" + escapeHtml(d.temsilci_adi) + ")" : ""}`
+        : "";
       const iadeCell = d.iade_tarihi
         ? escapeHtml(fmtDate(d.iade_tarihi)) + hedefNote + (d.iade_notu ? ` <span class="empty-note">(${escapeHtml(d.iade_notu)})</span>` : "")
         : (pendingTemsilciRow
@@ -1117,6 +1146,38 @@ async function loadMusteriler(){
   }
 }
 
+async function loadTemsilciler(){
+  const sel = el("ti-temsilci");
+  const prevValue = sel.value;
+  try{
+    const res = await fetch("/api/temsilciler", { credentials: "same-origin" });
+    if(res.ok){
+      const data = await res.json();
+      temsilciListesi = data.temsilciler || [];
+    }
+  } catch(err){
+    temsilciListesi = temsilciListesi || [];
+  }
+
+  sel.innerHTML = `<option value="" disabled>Seçiniz...</option>`;
+  temsilciListesi.forEach(m=>{
+    const opt = document.createElement("option");
+    opt.value = m.ad;
+    opt.textContent = m.ad;
+    sel.appendChild(opt);
+  });
+  const optNew = document.createElement("option");
+  optNew.value = "__new__";
+  optNew.textContent = "+ Yeni temsilci ekle...";
+  sel.appendChild(optNew);
+
+  if(prevValue && [...sel.options].some(o=>o.value === prevValue)){
+    sel.value = prevValue;
+  } else {
+    sel.value = "";
+  }
+}
+
 async function renderMusterilerListesi(){
   const wrap = el("musteriler-liste");
   wrap.innerHTML = "Yükleniyor...";
@@ -1169,6 +1230,67 @@ el("musteri-yonet-btn").addEventListener("click", async ()=>{
   await renderMusterilerListesi();
 });
 el("musteriler-kapat").addEventListener("click", ()=> el("modal-musteriler").hidden = true);
+
+async function renderTemsilcilerListesi(){
+  const wrap = el("temsilciler-liste");
+  wrap.innerHTML = "Yükleniyor...";
+  try{
+    const res = await fetch("/api/temsilciler", { credentials: "same-origin" });
+    if(!res.ok){ wrap.textContent = "Temsilciler yüklenemedi."; return; }
+    const data = await res.json();
+    const list = data.temsilciler || [];
+    wrap.innerHTML = "";
+    if(!list.length){
+      wrap.innerHTML = '<div class="empty-note">Henüz temsilci eklenmemiş.</div>';
+      return;
+    }
+    list.forEach(m=>{
+      const row = document.createElement("div");
+      row.className = "musteri-satir";
+      const name = document.createElement("span");
+      name.textContent = m.ad;
+      row.appendChild(name);
+      if(currentUser?.rol === "editor"){
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-danger btn-small";
+        btn.textContent = "Sil";
+        btn.addEventListener("click", async ()=>{
+          const onay = confirm(`"${m.ad}" temsilcisini silmek istediğinize emin misiniz? Bu temsilciye ait mevcut iade kayıtları etkilenmez, sadece seçim listesinden kaldırılır.`);
+          if(!onay) return;
+          btn.disabled = true;
+          const delRes = await fetch(`/api/temsilciler/${encodeURIComponent(m.id)}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+          });
+          if(!delRes.ok){
+            const d = await delRes.json().catch(()=>({}));
+            alert("Silinemedi: " + (d.error || delRes.status));
+            btn.disabled = false;
+            return;
+          }
+          await renderTemsilcilerListesi();
+          await loadTemsilciler();
+        });
+        row.appendChild(btn);
+      }
+      wrap.appendChild(row);
+    });
+  } catch(err){
+    wrap.textContent = "Temsilciler yüklenemedi.";
+  }
+}
+el("temsilci-yonet-btn").addEventListener("click", async ()=>{
+  el("modal-temsilciler").hidden = false;
+  await renderTemsilcilerListesi();
+});
+el("temsilciler-kapat").addEventListener("click", ()=> el("modal-temsilciler").hidden = true);
+
+el("ti-temsilci").addEventListener("change", ()=>{
+  const isNew = el("ti-temsilci").value === "__new__";
+  el("temsilci-yeni-wrap").hidden = !isNew;
+  if(!isNew) el("ti-temsilci-yeni").value = "";
+});
 
 el("f-musteri").addEventListener("change", ()=>{
   const isNew = el("f-musteri").value === "__new__";
@@ -1478,20 +1600,71 @@ el("talep-form").addEventListener("submit", async (ev)=>{
 
 let temsilciIadeForDagitimId = null;
 
-function openTemsilciIadeModal(dagitimId){
+async function openTemsilciIadeModal(dagitimId){
   temsilciIadeForDagitimId = dagitimId;
   el("temsilci-iade-form").reset();
   el("temsilci-iade-form-error").hidden = true;
+  el("temsilci-yeni-wrap").hidden = true;
+  el("ti-teslim-tarihi").value = todayStr();
+  await loadTemsilciler();
   el("modal-temsilci-iade").hidden = false;
 }
 el("temsilci-iade-cancel").addEventListener("click", ()=> el("modal-temsilci-iade").hidden = true);
 
 el("temsilci-iade-form").addEventListener("submit", async (ev)=>{
   ev.preventDefault();
+  const e = el("temsilci-iade-form-error");
+  e.hidden = true;
+
+  const temsilciSecim = el("ti-temsilci").value;
+  let temsilciAdi = temsilciSecim;
+  const teslimTarihi = el("ti-teslim-tarihi").value;
+
   const btn = el("temsilci-iade-save");
   btn.disabled = true;
+
+  if(temsilciSecim === "__new__"){
+    const yeniAd = el("ti-temsilci-yeni").value.trim();
+    if(!yeniAd){
+      e.textContent = "Yeni temsilci adını yazın.";
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const temsilciRes = await fetch("/api/temsilciler", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ad: yeniAd }),
+    });
+    if(!temsilciRes.ok){
+      const data = await temsilciRes.json().catch(()=>({}));
+      e.textContent = "Temsilci eklenemedi: " + (data.error || temsilciRes.status);
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const temsilciData = await temsilciRes.json();
+    temsilciAdi = temsilciData.temsilci.ad;
+  }
+
+  if(!temsilciAdi || temsilciSecim === ""){
+    e.textContent = "Müşteri temsilcisini seçin.";
+    e.hidden = false;
+    btn.disabled = false;
+    return;
+  }
+  if(!teslimTarihi){
+    e.textContent = "Teslim tarihini seçin.";
+    e.hidden = false;
+    btn.disabled = false;
+    return;
+  }
+
   const payload = {
     dagitim_id: temsilciIadeForDagitimId,
+    temsilci_adi: temsilciAdi,
+    teslim_tarihi: teslimTarihi,
     not: el("ti-not").value.trim() || null,
   };
 
@@ -1505,7 +1678,6 @@ el("temsilci-iade-form").addEventListener("submit", async (ev)=>{
 
   if(!res.ok){
     const data = await res.json().catch(()=>({}));
-    const e = el("temsilci-iade-form-error");
     if(res.status === 409){
       e.textContent = "Bu dağıtım için zaten bekleyen bir iade onayı var.";
     } else {
