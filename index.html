@@ -170,6 +170,37 @@
     color:var(--muted);
   }
 
+  .pagination-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    padding:12px 16px;
+    border-top:1px solid var(--border);
+  }
+  .pagination-size{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:var(--fs-sm);
+    color:var(--muted);
+  }
+  .pagination-size select{
+    width:auto;
+    padding:4px 8px;
+  }
+  .pagination-nav{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .pagination-info{
+    font-size:var(--fs-sm);
+    color:var(--muted);
+    white-space:nowrap;
+  }
+
   .card{
     background:var(--card);
     border:1px solid var(--border);
@@ -453,6 +484,22 @@
           </tbody>
         </table>
       </div>
+      <div class="pagination-bar">
+        <div class="pagination-size">
+          <label for="page-size-select">Sayfa başına:</label>
+          <select id="page-size-select">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div class="pagination-nav">
+          <button type="button" class="btn-secondary btn-small" id="page-prev">‹ Önceki</button>
+          <span class="pagination-info" id="page-info"></span>
+          <button type="button" class="btn-secondary btn-small" id="page-next">Sonraki ›</button>
+        </div>
+      </div>
     </div>
 
     <footer class="hint">Narkonteks &middot; Numune / Kartela Takip Sistemi</footer>
@@ -544,6 +591,23 @@
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="iade-cancel">Vazgeç</button>
         <button type="submit" class="btn-primary" id="iade-save">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-kesimhane-donus" hidden>
+  <div class="modal">
+    <h2>Kesimhaneye Geri Al (Müşteri Temsilciliğinden)</h2>
+    <div id="kesimhane-donus-form-error" class="error-msg" hidden></div>
+    <form id="kesimhane-donus-form">
+      <label>Kesimhaneye Dönüş Tarihi *</label>
+      <input type="date" id="kd-tarih" required />
+      <label>Not</label>
+      <input type="text" id="kd-not" />
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="kesimhane-donus-cancel">Vazgeç</button>
+        <button type="submit" class="btn-primary" id="kesimhane-donus-save">Kaydet</button>
       </div>
     </form>
   </div>
@@ -800,6 +864,9 @@ function matchesSearch(n){
   return hay.includes(searchTerm.toLowerCase());
 }
 
+let pageSize = 25;
+let currentPage = 1;
+
 function renderTable(){
   const tbody = el("numune-tbody");
   const filtered = numuneler.filter(matchesSearch);
@@ -807,11 +874,24 @@ function renderTable(){
 
   if(filtered.length === 0){
     tbody.innerHTML = `<tr><td colspan="7" class="empty-note">Kayıt bulunamadı.</td></tr>`;
+    el("page-info").textContent = "";
+    el("page-prev").disabled = true;
+    el("page-next").disabled = true;
     return;
   }
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if(currentPage > totalPages) currentPage = totalPages;
+  if(currentPage < 1) currentPage = 1;
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageItems = filtered.slice(pageStart, pageStart + pageSize);
+
+  el("page-info").textContent = `Sayfa ${currentPage} / ${totalPages}`;
+  el("page-prev").disabled = currentPage <= 1;
+  el("page-next").disabled = currentPage >= totalPages;
+
   tbody.innerHTML = "";
-  filtered.forEach(n=>{
+  pageItems.forEach(n=>{
     const count = n.dagitimlar.length;
     const son = count > 0 ? n.dagitimlar[0] : null;
     const pendingTemsilci = son ? pendingTemsilciIadeFor(son.id) : null;
@@ -820,11 +900,14 @@ function renderTable(){
       statusHtml = `<span class="status-pill status-bekliyor">Kesimhanede</span>`;
     } else if(son.iade_tarihi){
       const hedefIsTemsilci = son.iade_hedef === "musteri_temsilcisi";
-      const hedefLabel = hedefIsTemsilci ? "Müşteri Temsilciliğinde" : "Kesimhanede";
-      const hedefClass = hedefIsTemsilci ? "status-temsilci" : "status-bekliyor";
-      const hedefSub = hedefIsTemsilci && son.temsilci_adi
-        ? `${escapeHtml(son.temsilci_adi)} · ${fmtDate(son.iade_tarihi)}`
-        : fmtDate(son.iade_tarihi);
+      const donduMu = hedefIsTemsilci && !!son.kesimhane_donus_tarihi;
+      const hedefLabel = donduMu ? "Kesimhanede" : (hedefIsTemsilci ? "Müşteri Temsilciliğinde" : "Kesimhanede");
+      const hedefClass = donduMu ? "status-bekliyor" : (hedefIsTemsilci ? "status-temsilci" : "status-bekliyor");
+      const hedefSub = donduMu
+        ? `Temsilcilikten döndü · ${fmtDate(son.kesimhane_donus_tarihi)}`
+        : (hedefIsTemsilci && son.temsilci_adi
+            ? `${escapeHtml(son.temsilci_adi)} · ${fmtDate(son.iade_tarihi)}`
+            : fmtDate(son.iade_tarihi));
       statusHtml = `<span class="status-pill ${hedefClass}">${hedefLabel} <span class="status-sub">(${hedefSub})</span></span>`;
     } else {
       const sonTipLabel = son.tip === "uretim" ? "Üretim" : "Fason";
@@ -1054,11 +1137,18 @@ function renderDetail(n){
       const tipLabel = d.tip === "uretim" ? "Üretim" : "Fason";
       const pendingTemsilciRow = idx === 0 ? pendingTemsilciIadeFor(d.id) : null;
       const canReturn = idx === 0 && !d.iade_tarihi && !pendingTemsilciRow && currentUser?.rol === "editor";
+      const bekleyenKesimhaneDonus = d.iade_hedef === "musteri_temsilcisi" && d.iade_tarihi && !d.kesimhane_donus_tarihi;
+      const canKesimhaneDonus = idx === 0 && bekleyenKesimhaneDonus && currentUser?.rol === "editor";
       const hedefNote = d.iade_hedef === "musteri_temsilcisi"
         ? ` · Müşteri Temsilciliği${d.temsilci_adi ? " (" + escapeHtml(d.temsilci_adi) + ")" : ""}`
         : "";
+      const kesimhaneDonusNote = d.kesimhane_donus_tarihi
+        ? ` <span class="empty-note">→ Kesimhaneye döndü: ${escapeHtml(fmtDate(d.kesimhane_donus_tarihi))}${d.kesimhane_donus_notu ? " (" + escapeHtml(d.kesimhane_donus_notu) + ")" : ""}</span>`
+        : (canKesimhaneDonus
+            ? ` <button type="button" class="btn-secondary btn-small btn-kesimhane-donus" data-id="${escapeHtml(d.id)}">Kesimhaneye Geri Al</button>`
+            : "");
       const iadeCell = d.iade_tarihi
-        ? escapeHtml(fmtDate(d.iade_tarihi)) + hedefNote + (d.iade_notu ? ` <span class="empty-note">(${escapeHtml(d.iade_notu)})</span>` : "")
+        ? escapeHtml(fmtDate(d.iade_tarihi)) + hedefNote + kesimhaneDonusNote + (d.iade_notu ? ` <span class="empty-note">(${escapeHtml(d.iade_notu)})</span>` : "")
         : (pendingTemsilciRow
             ? `<span class="empty-note">Temsilciye iade onayı bekleniyor</span>`
             : (canReturn ? `<button type="button" class="btn-secondary btn-small btn-iade-al" data-id="${escapeHtml(d.id)}">Geri Al</button>` : "-"));
@@ -1077,6 +1167,12 @@ function renderDetail(n){
       btn.addEventListener("click", (ev)=>{
         ev.stopPropagation();
         openIadeModal(btn.dataset.id);
+      });
+    });
+    wrap.querySelectorAll(".btn-kesimhane-donus").forEach(btn=>{
+      btn.addEventListener("click", (ev)=>{
+        ev.stopPropagation();
+        openKesimhaneDonusModal(btn.dataset.id);
       });
     });
   }
@@ -1114,6 +1210,25 @@ function toggleDetail(id){
 
 el("search-input").addEventListener("input", (ev)=>{
   searchTerm = ev.target.value;
+  currentPage = 1;
+  renderTable();
+});
+
+el("page-size-select").addEventListener("change", (ev)=>{
+  pageSize = parseInt(ev.target.value, 10) || 25;
+  currentPage = 1;
+  renderTable();
+});
+
+el("page-prev").addEventListener("click", ()=>{
+  if(currentPage > 1){
+    currentPage--;
+    renderTable();
+  }
+});
+
+el("page-next").addEventListener("click", ()=>{
+  currentPage++;
   renderTable();
 });
 
@@ -1580,6 +1695,48 @@ el("iade-form").addEventListener("submit", async (ev)=>{
   }
   el("modal-iade").hidden = true;
   showToast("Numune kesimhaneye geri alındı olarak işaretlendi.");
+  await loadNumuneler();
+});
+
+let kesimhaneDonusForDagitimId = null;
+
+function openKesimhaneDonusModal(dagitimId){
+  kesimhaneDonusForDagitimId = dagitimId;
+  el("kesimhane-donus-form").reset();
+  el("kd-tarih").value = todayStr();
+  el("kesimhane-donus-form-error").hidden = true;
+  el("modal-kesimhane-donus").hidden = false;
+}
+el("kesimhane-donus-cancel").addEventListener("click", ()=> el("modal-kesimhane-donus").hidden = true);
+
+el("kesimhane-donus-form").addEventListener("submit", async (ev)=>{
+  ev.preventDefault();
+  const btn = el("kesimhane-donus-save");
+  btn.disabled = true;
+  const payload = {
+    kesimhane_donus_tarihi: el("kd-tarih").value,
+    kesimhane_donus_notu: el("kd-not").value.trim() || null,
+  };
+
+  const res = await fetch(`/api/dagitimlar/${encodeURIComponent(kesimhaneDonusForDagitimId)}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  btn.disabled = false;
+
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    const e = el("kesimhane-donus-form-error");
+    e.textContent = res.status === 403
+      ? "Bu işlem için yetkiniz yok."
+      : "Kaydedilemedi: " + (data.error || res.status);
+    e.hidden = false;
+    return;
+  }
+  el("modal-kesimhane-donus").hidden = true;
+  showToast("Numune müşteri temsilciliğinden kesimhaneye geri alındı olarak işaretlendi.");
   await loadNumuneler();
 });
 
