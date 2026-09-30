@@ -275,6 +275,20 @@
   .talep-card.temsilci-card{background:#eaf1fb;border-color:#c3d9f5;}
   .talep-card.temsilci-card h2{color:#2c5aa0;}
   .talep-card.temsilci-card .talep-row{border-bottom-color:#d7e6f9;}
+  .talep-tamamlanan{
+    margin-top:10px;
+    padding-top:10px;
+    border-top:1px dashed #f0dcb8;
+  }
+  .talep-tamamlanan summary{
+    cursor:pointer;
+    font-size:var(--fs-sm);
+    color:var(--muted);
+    font-weight:600;
+  }
+  .talep-tamamlanan .talep-row{
+    opacity:.75;
+  }
   .btn-small{
     padding:6px 10px;
     font-size:var(--fs-sm);
@@ -414,6 +428,12 @@
     z-index:50;
     max-width:320px;
   }
+  .toast.toast-notify{
+    background:var(--primary-dark);
+    border-left:4px solid var(--accent);
+    padding-left:12px;
+    font-weight:600;
+  }
 </style>
 </head>
 <body>
@@ -452,6 +472,10 @@
     <div class="talep-card" id="talep-panel" hidden>
       <h2>Bekleyen Talepler</h2>
       <div id="talep-list"></div>
+      <details class="talep-tamamlanan" id="talep-tamamlanan-wrap" hidden>
+        <summary>Son tamamlanan talepler</summary>
+        <div id="talep-tamamlanan-list"></div>
+      </details>
     </div>
 
     <div class="talep-card temsilci-card" id="temsilci-iade-panel" hidden>
@@ -702,11 +726,31 @@ function showToast(msg){
   setTimeout(()=>t.remove(), 3500);
 }
 
+// Yeni talep/bildirim geldiginde sag alt kosede daha dikkat cekici, daha uzun sureli bildirim.
+function showNotifyToast(msg){
+  const t = document.createElement("div");
+  t.className = "toast toast-notify";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 6000);
+}
+
 function fmtDate(d){
   if(!d) return "-";
   const dt = new Date(d.length > 10 ? d.replace(" ", "T") : d + "T00:00:00");
   if(isNaN(dt)) return d;
   return dt.toLocaleDateString("tr-TR", {day:"2-digit", month:"2-digit", year:"numeric"});
+}
+
+// created_at / tamamlanma_tarihi gibi datetime('now') ile saklanan (UTC) alanlar icin;
+// saat:dakika da gosterir ve UTC->yerel saat donusumunu dogru yapar.
+function fmtDateTime(d){
+  if(!d) return "-";
+  let iso = d.length > 10 ? d.replace(" ", "T") : d + "T00:00:00";
+  if(d.length > 10 && !iso.endsWith("Z")) iso += "Z";
+  const dt = new Date(iso);
+  if(isNaN(dt)) return d;
+  return dt.toLocaleString("tr-TR", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"});
 }
 
 function todayStr(){
@@ -762,10 +806,12 @@ function showApp(){
     badge.textContent = "Düzenleyici";
     badge.className = "badge badge-editor";
     el("open-new-numune").hidden = false;
+    startPolling();
   } else {
     badge.textContent = "Görüntüleyici";
     badge.className = "badge badge-viewer";
     el("open-new-numune").hidden = true;
+    stopPolling();
   }
   loadNumuneler();
 }
@@ -810,6 +856,7 @@ el("logout-btn").addEventListener("click", async ()=>{
   await fetch("/api/logout", { method: "POST", credentials: "same-origin" }).catch(()=>{});
   currentUser = null;
   numuneler = [];
+  stopPolling();
   showLogin();
 });
 
@@ -845,6 +892,7 @@ async function loadNumuneler(){
   temsilciIadeleri = temsilciData || [];
   renderTable();
   renderPendingTalepler();
+  renderCompletedTalepler();
   renderPendingTemsilciIadeleri();
 }
 
@@ -854,6 +902,93 @@ function pendingTalepFor(numuneId){
 
 function pendingTemsilciIadeFor(dagitimId){
   return temsilciIadeleri.find(t => t.dagitim_id === dagitimId && t.durum === "bekliyor") || null;
+}
+
+function renderCompletedTalepler(){
+  const wrap = el("talep-tamamlanan-wrap");
+  if(!wrap) return;
+  if(currentUser?.rol !== "editor"){
+    wrap.hidden = true;
+    return;
+  }
+  const completed = talepler
+    .filter(t => t.durum === "tamamlandi")
+    .sort((a,b) => new Date((b.tamamlanma_tarihi || b.created_at) + "Z") - new Date((a.tamamlanma_tarihi || a.created_at) + "Z"))
+    .slice(0, 10);
+  if(completed.length === 0){
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  const list = el("talep-tamamlanan-list");
+  list.innerHTML = "";
+  completed.forEach(t=>{
+    const n = numuneler.find(x => x.id === t.numune_id);
+    const row = document.createElement("div");
+    row.className = "talep-row";
+    row.innerHTML = `
+      <div class="talep-info">
+        <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}<br/>
+        <span class="talep-note">Talep: ${fmtDateTime(t.created_at)} · Hazırlandı: ${t.tamamlanma_tarihi ? fmtDateTime(t.tamamlanma_tarihi) : "-"}</span>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* ------------------------- CANLI BILDIRIM (POLLING) ------------------------- */
+
+let knownPendingTalepIds = null;
+let knownPendingTemsilciIds = null;
+let pollHandle = null;
+
+async function checkForNewTalepler(){
+  if(currentUser?.rol !== "editor") return;
+  try{
+    const [talepRes, temsilciRes] = await Promise.all([
+      fetch("/api/talepler", { credentials: "same-origin" }),
+      fetch("/api/temsilci-iade", { credentials: "same-origin" }),
+    ]);
+    const { talepler: taleps } = talepRes.ok ? await talepRes.json() : { talepler: [] };
+    const { temsilci_iadeleri: temsilciData } = temsilciRes.ok ? await temsilciRes.json() : { temsilci_iadeleri: [] };
+
+    const newPendingTalepIds = new Set((taleps || []).filter(t => t.durum === "bekliyor").map(t => t.id));
+    const newPendingTemsilciIds = new Set((temsilciData || []).filter(t => t.durum === "bekliyor").map(t => t.id));
+
+    let yeniTalep = 0, yeniTemsilci = 0;
+    if(knownPendingTalepIds && knownPendingTemsilciIds){
+      yeniTalep = [...newPendingTalepIds].filter(id => !knownPendingTalepIds.has(id)).length;
+      yeniTemsilci = [...newPendingTemsilciIds].filter(id => !knownPendingTemsilciIds.has(id)).length;
+    }
+
+    knownPendingTalepIds = newPendingTalepIds;
+    knownPendingTemsilciIds = newPendingTemsilciIds;
+
+    if(yeniTalep > 0){
+      showNotifyToast(yeniTalep === 1 ? "Yeni bir numune talebi geldi." : `${yeniTalep} yeni numune talebi geldi.`);
+    }
+    if(yeniTemsilci > 0){
+      showNotifyToast(yeniTemsilci === 1 ? "Yeni bir müşteri temsilcisi iade bildirimi geldi." : `${yeniTemsilci} yeni müşteri temsilcisi iade bildirimi geldi.`);
+    }
+    if(yeniTalep > 0 || yeniTemsilci > 0){
+      await loadNumuneler();
+    }
+  } catch(err){
+    // sessizce yut, bir sonraki pollde tekrar denenecek
+  }
+}
+
+function startPolling(){
+  if(pollHandle) return;
+  pollHandle = setInterval(checkForNewTalepler, 20000);
+}
+function stopPolling(){
+  if(pollHandle){
+    clearInterval(pollHandle);
+    pollHandle = null;
+  }
+  knownPendingTalepIds = null;
+  knownPendingTemsilciIds = null;
 }
 
 /* ------------------------- GORUNTULEME ------------------------- */
@@ -991,7 +1126,7 @@ function renderPendingTalepler(){
     row.innerHTML = `
       <div class="talep-info">
         <strong>${escapeHtml(n ? formatAdi(n.numune_adi) : "(numune bulunamadı)")}</strong>${n && n.musteri ? " · " + escapeHtml(n.musteri) : ""}${n && n.model_siparis_no ? " · " + escapeHtml(formatAdi(n.model_siparis_no)) : ""}${n && n.renk ? " · " + escapeHtml(formatAdi(n.renk)) : ""}<br/>
-        <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDate(t.created_at)} tarihinde talep edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
+        <span class="talep-note">${escapeHtml(t.talep_eden_ad || t.talep_eden_email)} tarafından ${fmtDateTime(t.created_at)} tarihinde talep edildi.${t.not_ ? " Not: " + escapeHtml(t.not_) : ""}</span>
       </div>
     `;
     const actions = document.createElement("div");
