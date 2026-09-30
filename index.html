@@ -434,6 +434,10 @@
     padding-left:12px;
     font-weight:600;
   }
+  #notif-permission-btn.granted{
+    opacity:.6;
+    cursor:default;
+  }
 </style>
 </head>
 <body>
@@ -464,6 +468,7 @@
     <div class="user-chip">
       <span id="user-name">-</span>
       <span id="user-role-badge" class="badge badge-viewer">Görüntüleyici</span>
+      <button class="btn-secondary" id="notif-permission-btn" hidden>🔔 Bildirimleri Etkinleştir</button>
       <button class="btn-secondary" id="logout-btn">Çıkış</button>
     </div>
   </header>
@@ -735,6 +740,52 @@ function showNotifyToast(msg){
   setTimeout(()=>t.remove(), 6000);
 }
 
+// Chrome/tarayici seviyesinde gercek masaustu bildirimi (sekme arka planda olsa bile).
+// Kullanici daha once izin vermemisse sessizce hicbir sey yapmiyor; izin akisi
+// updateNotifPermissionBtn() / notif-permission-btn ile kullanicinin kendi tikiyla yapiliyor.
+function showBrowserNotification(title, body){
+  try{
+    if(typeof Notification === "undefined") return;
+    if(Notification.permission !== "granted") return;
+    const n = new Notification(title, { body });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch(err){
+    // bildirim gosterilemezse sessizce yut, sayfa ici toast zaten gosterildi
+  }
+}
+
+function updateNotifPermissionBtn(){
+  const btn = el("notif-permission-btn");
+  if(!btn) return;
+  if(typeof Notification === "undefined"){
+    btn.hidden = true;
+    return;
+  }
+  if(Notification.permission === "granted"){
+    btn.hidden = false;
+    btn.textContent = "🔔 Bildirimler Açık";
+    btn.classList.add("granted");
+    btn.disabled = true;
+  } else if(Notification.permission === "denied"){
+    btn.hidden = true;
+  } else {
+    btn.hidden = false;
+    btn.textContent = "🔔 Bildirimleri Etkinleştir";
+    btn.classList.remove("granted");
+    btn.disabled = false;
+  }
+}
+
+el("notif-permission-btn")?.addEventListener("click", async ()=>{
+  if(typeof Notification === "undefined") return;
+  try{
+    await Notification.requestPermission();
+  } catch(err){
+    // yoksay
+  }
+  updateNotifPermissionBtn();
+});
+
 function fmtDate(d){
   if(!d) return "-";
   const dt = new Date(d.length > 10 ? d.replace(" ", "T") : d + "T00:00:00");
@@ -807,6 +858,7 @@ function showApp(){
     badge.className = "badge badge-editor";
     el("open-new-numune").hidden = false;
     startPolling();
+    updateNotifPermissionBtn();
   } else {
     badge.textContent = "Görüntüleyici";
     badge.className = "badge badge-viewer";
@@ -965,10 +1017,14 @@ async function checkForNewTalepler(){
     knownPendingTemsilciIds = newPendingTemsilciIds;
 
     if(yeniTalep > 0){
-      showNotifyToast(yeniTalep === 1 ? "Yeni bir numune talebi geldi." : `${yeniTalep} yeni numune talebi geldi.`);
+      const __msgTalep = yeniTalep === 1 ? "Yeni bir numune talebi geldi." : `${yeniTalep} yeni numune talebi geldi.`;
+      showNotifyToast(__msgTalep);
+      showBrowserNotification("Numune Takip", __msgTalep);
     }
     if(yeniTemsilci > 0){
-      showNotifyToast(yeniTemsilci === 1 ? "Yeni bir müşteri temsilcisi iade bildirimi geldi." : `${yeniTemsilci} yeni müşteri temsilcisi iade bildirimi geldi.`);
+      const __msgTemsilci = yeniTemsilci === 1 ? "Yeni bir müşteri temsilcisi iade bildirimi geldi." : `${yeniTemsilci} yeni müşteri temsilcisi iade bildirimi geldi.`;
+      showNotifyToast(__msgTemsilci);
+      showBrowserNotification("Numune Takip", __msgTemsilci);
     }
     if(yeniTalep > 0 || yeniTemsilci > 0){
       await loadNumuneler();
