@@ -754,6 +754,42 @@ function showBrowserNotification(title, body){
   }
 }
 
+const VAPID_PUBLIC_KEY = "BJfyzpDyEN90C_M_h787EDw2NxqevBdbKBEjul9P_VK3P62ZDU4iN6cibZGaZ92NNqesV2XT7CEnOtD3of7sgsI";
+
+function urlBase64ToUint8Array(base64String){
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for(let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+// Service Worker kaydeder, push aboneligi olusturur (yoksa) ve sunucuya kaydeder/gunceller.
+// Chrome arka plan sekmesinde/minimize iken bile gercek masaustu bildirimi gosterebilmek
+// icin bu gerekiyor (sayfa-ici toast + 20sn polling sadece sekme acikken calisir).
+async function ensurePushSubscription(){
+  if(!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  try{
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    await fetch("/api/push-abonelikleri", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sub.toJSON()),
+    });
+  } catch(err){
+    // yoksay - push calismasa da sayfa-ici toast ve polling devam eder
+  }
+}
+
 function updateNotifPermissionBtn(){
   const btn = el("notif-permission-btn");
   if(!btn) return;
@@ -766,6 +802,7 @@ function updateNotifPermissionBtn(){
     btn.textContent = "🔔 Bildirimler Açık";
     btn.classList.add("granted");
     btn.disabled = true;
+    ensurePushSubscription();
   } else if(Notification.permission === "denied"){
     btn.hidden = true;
   } else {
@@ -1022,12 +1059,10 @@ async function checkForNewTalepler(){
     if(yeniTalep > 0){
       const __msgTalep = yeniTalep === 1 ? "Yeni bir numune talebi geldi." : `${yeniTalep} yeni numune talebi geldi.`;
       showNotifyToast(__msgTalep);
-      showBrowserNotification("Numune Takip", __msgTalep);
     }
     if(yeniTemsilci > 0){
       const __msgTemsilci = yeniTemsilci === 1 ? "Yeni bir müşteri temsilcisi iade bildirimi geldi." : `${yeniTemsilci} yeni müşteri temsilcisi iade bildirimi geldi.`;
       showNotifyToast(__msgTemsilci);
-      showBrowserNotification("Numune Takip", __msgTemsilci);
     }
     if(yeniTalep > 0 || yeniTemsilci > 0){
       await loadNumuneler();
