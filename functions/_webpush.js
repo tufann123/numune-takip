@@ -128,3 +128,28 @@ export async function sendWebPush(subscription, payloadObj, env) {
 
   return { ok: res.ok, status: res.status, expired: res.status === 404 || res.status === 410 };
 }
+
+// Editor rolundeki tum kullanicilarin push aboneliklerine bildirim gonderir.
+// Gecersiz/suresi dolmus abonelikler (404/410) otomatik olarak silinir.
+export async function notifyEditors(env, payloadObj) {
+  const { results } = await env.DB
+    .prepare(
+      `SELECT pa.id, pa.endpoint, pa.p256dh, pa.auth
+       FROM push_abonelikleri pa
+       JOIN kullanicilar k ON k.email = pa.email
+       WHERE k.rol = 'editor'`
+    )
+    .all();
+
+  for (const row of results || []) {
+    const subscription = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } };
+    try {
+      const result = await sendWebPush(subscription, payloadObj, env);
+      if (result.expired) {
+        await env.DB.prepare("DELETE FROM push_abonelikleri WHERE id = ?").bind(row.id).run();
+      }
+    } catch (err) {
+      // Tek bir aboneligin basarisiz olmasi digerlerini etkilemesin.
+    }
+  }
+}
