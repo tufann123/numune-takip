@@ -1,4 +1,5 @@
 import { getUser, json, newId } from "../../_lib.js";
+import { notifyEditors } from "../../_webpush.js";
 
 export async function onRequestGet(context) {
   const user = await getUser(context);
@@ -56,6 +57,17 @@ export async function onRequestPost(context) {
     )
     .bind(id, body.dagitim_id, user.email, user.ad_soyad, body.not || null, temsilciAdi, teslimTarihi)
     .run();
+
+  // Editorlere push bildirimi gonder - basarisiz olursa yaniti etkilemesin.
+  try {
+    await notifyEditors(context.env, {
+      title: "Müşteri temsilcisine iade bildirimi",
+      body: `${user.ad_soyad}, ${temsilciAdi} temsilcisine iade bildirdi.`,
+      url: "/",
+    });
+  } catch (err) {
+    // yoksay - push gonderimi basarisiz olsa da bildirim zaten olusturuldu
+  }
 
   return json({ id }, 201);
 }
