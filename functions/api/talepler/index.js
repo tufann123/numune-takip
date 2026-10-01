@@ -1,4 +1,5 @@
 import { getUser, json, newId } from "../../_lib.js";
+import { notifyEditors } from "../../_webpush.js";
 
 export async function onRequestGet(context) {
   const user = await getUser(context);
@@ -38,6 +39,22 @@ export async function onRequestPost(context) {
     )
     .bind(id, body.numune_id, user.email, user.ad_soyad, body.not || null)
     .run();
+
+  // Editorlere push bildirimi gonder - basarisiz olursa talep olusturma yanitini etkilemesin.
+  try {
+    const numune = await context.env.DB
+      .prepare("SELECT numune_adi FROM numuneler WHERE id = ?")
+      .bind(body.numune_id)
+      .first();
+    const adi = numune?.numune_adi ? ` (${numune.numune_adi})` : "";
+    await notifyEditors(context.env, {
+      title: "Yeni numune talebi",
+      body: `${user.ad_soyad} bir talep gönderdi${adi}.`,
+      url: "/",
+    });
+  } catch (err) {
+    // yoksay - push gonderimi basarisiz olsa da talep zaten olusturuldu
+  }
 
   return json({ id }, 201);
 }
