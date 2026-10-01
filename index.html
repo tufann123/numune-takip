@@ -779,7 +779,10 @@ function updateNotifPermissionBtn(){
 el("notif-permission-btn")?.addEventListener("click", async ()=>{
   if(typeof Notification === "undefined") return;
   try{
-    await Notification.requestPermission();
+    const sonuc = await Notification.requestPermission();
+    if(sonuc === "granted"){
+      showBrowserNotification("Bildirimler açık", "Yeni bir talep geldiğinde burada bildirim göreceksiniz. Bu test bildirimidir.");
+    }
   } catch(err){
     // yoksay
   }
@@ -1036,6 +1039,7 @@ async function checkForNewTalepler(){
 
 function startPolling(){
   if(pollHandle) return;
+  checkForNewTalepler(); // ilk kontrolu hemen yap, 20sn'lik ilk pencerede gelen talep kacmasin
   pollHandle = setInterval(checkForNewTalepler, 20000);
 }
 function stopPolling(){
