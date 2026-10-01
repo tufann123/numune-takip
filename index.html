@@ -648,6 +648,16 @@
     <h2>Numune Talep Et</h2>
     <div id="talep-form-error" class="error-msg" hidden></div>
     <form id="talep-form">
+      <label>Talep Eden Kişi *</label>
+      <select id="t-talep-eden" required>
+        <option value="" disabled selected>Seçiniz...</option>
+        <option value="__new__">+ Yeni kişi ekle...</option>
+      </select>
+      <button type="button" class="link-btn" id="talep-eden-yonet-btn">Kişileri yönet</button>
+      <div class="musteri-yeni-wrap" id="talep-eden-yeni-wrap" hidden>
+        <label>Yeni Kişi Adı *</label>
+        <input type="text" id="t-talep-eden-yeni" placeholder="Adınızı yazın" />
+      </div>
       <label>Not (opsiyonel)</label>
       <textarea id="t-not" placeholder="Örn: acil, yarın sabah lazım..."></textarea>
       <div class="modal-actions">
@@ -711,6 +721,21 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-talep-eden-kisiler" hidden>
+  <div class="modal">
+    <h2>Talep Eden Kişileri Yönet</h2>
+    <div style="display:flex; gap:8px; align-items:flex-start;">
+      <input type="text" id="talep-eden-yeni-ad" placeholder="Yeni kişi adı" style="flex:1; margin-bottom:0;" />
+      <button type="button" class="btn-primary btn-small" id="talep-eden-ekle-btn">Ekle</button>
+    </div>
+    <div id="talep-eden-kisiler-ekle-error" class="error-msg" hidden style="margin-top:10px;"></div>
+    <div id="talep-eden-kisiler-liste" class="musteriler-liste" style="margin-top:16px;"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="talep-eden-kisiler-kapat">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let currentUser = null;   // { email, ad_soyad, rol }
 let numuneler = [];
@@ -718,6 +743,7 @@ let talepler = [];
 let temsilciIadeleri = [];
 let musteriListesi = [];
 let temsilciListesi = [];
+let talepEdenKisiListesi = [];
 let openDetailId = null;
 let searchTerm = "";
 
@@ -1529,6 +1555,38 @@ async function loadTemsilciler(){
   }
 }
 
+async function loadTalepEdenKisiler(){
+  const sel = el("t-talep-eden");
+  const prevValue = sel.value;
+  try{
+    const res = await fetch("/api/talep-eden-kisiler", { credentials: "same-origin" });
+    if(res.ok){
+      const data = await res.json();
+      talepEdenKisiListesi = data.kisiler || [];
+    }
+  } catch(err){
+    talepEdenKisiListesi = talepEdenKisiListesi || [];
+  }
+
+  sel.innerHTML = `<option value="" disabled>Seçiniz...</option>`;
+  talepEdenKisiListesi.forEach(k=>{
+    const opt = document.createElement("option");
+    opt.value = k.ad;
+    opt.textContent = k.ad;
+    sel.appendChild(opt);
+  });
+  const optNew = document.createElement("option");
+  optNew.value = "__new__";
+  optNew.textContent = "+ Yeni kişi ekle...";
+  sel.appendChild(optNew);
+
+  if(prevValue && [...sel.options].some(o=>o.value === prevValue)){
+    sel.value = prevValue;
+  } else {
+    sel.value = "";
+  }
+}
+
 async function renderMusterilerListesi(){
   const wrap = el("musteriler-liste");
   wrap.innerHTML = "Yükleniyor...";
@@ -1664,6 +1722,96 @@ el("temsilci-ekle-btn").addEventListener("click", async ()=>{
   }
   input.value = "";
   await renderTemsilcilerListesi();
+});
+
+async function renderTalepEdenKisilerListesi(){
+  const wrap = el("talep-eden-kisiler-liste");
+  wrap.innerHTML = "Yükleniyor...";
+  try{
+    const res = await fetch("/api/talep-eden-kisiler", { credentials: "same-origin" });
+    if(!res.ok){ wrap.textContent = "Kişiler yüklenemedi."; return; }
+    const data = await res.json();
+    const list = data.kisiler || [];
+    wrap.innerHTML = "";
+    if(!list.length){
+      wrap.innerHTML = '<div class="empty-note">Henüz kişi eklenmemiş.</div>';
+      return;
+    }
+    list.forEach(k=>{
+      const row = document.createElement("div");
+      row.className = "musteri-satir";
+      const name = document.createElement("span");
+      name.textContent = k.ad;
+      row.appendChild(name);
+      if(currentUser?.rol === "editor"){
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn-danger btn-small";
+        btn.textContent = "Sil";
+        btn.addEventListener("click", async ()=>{
+          const onay = confirm(`"${k.ad}" kişisini silmek istediğinize emin misiniz? Bu kişiye ait mevcut talep kayıtları etkilenmez, sadece seçim listesinden kaldırılır.`);
+          if(!onay) return;
+          btn.disabled = true;
+          const delRes = await fetch(`/api/talep-eden-kisiler/${encodeURIComponent(k.id)}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+          });
+          if(!delRes.ok){
+            const d = await delRes.json().catch(()=>({}));
+            alert("Silinemedi: " + (d.error || delRes.status));
+            btn.disabled = false;
+            return;
+          }
+          await renderTalepEdenKisilerListesi();
+          await loadTalepEdenKisiler();
+        });
+        row.appendChild(btn);
+      }
+      wrap.appendChild(row);
+    });
+  } catch(err){
+    wrap.textContent = "Kişiler yüklenemedi.";
+  }
+}
+el("talep-eden-yonet-btn").addEventListener("click", async ()=>{
+  el("modal-talep-eden-kisiler").hidden = false;
+  await renderTalepEdenKisilerListesi();
+});
+el("talep-eden-kisiler-kapat").addEventListener("click", ()=> el("modal-talep-eden-kisiler").hidden = true);
+
+el("talep-eden-ekle-btn").addEventListener("click", async ()=>{
+  const input = el("talep-eden-yeni-ad");
+  const err = el("talep-eden-kisiler-ekle-error");
+  err.hidden = true;
+  const ad = input.value.trim();
+  if(!ad){
+    err.textContent = "Kişi adını yazın.";
+    err.hidden = false;
+    return;
+  }
+  const btn = el("talep-eden-ekle-btn");
+  btn.disabled = true;
+  const res = await fetch("/api/talep-eden-kisiler", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ad }),
+  });
+  btn.disabled = false;
+  if(!res.ok){
+    const data = await res.json().catch(()=>({}));
+    err.textContent = "Eklenemedi: " + (data.error || res.status);
+    err.hidden = false;
+    return;
+  }
+  input.value = "";
+  await renderTalepEdenKisilerListesi();
+});
+
+el("t-talep-eden").addEventListener("change", ()=>{
+  const isNew = el("t-talep-eden").value === "__new__";
+  el("talep-eden-yeni-wrap").hidden = !isNew;
+  if(!isNew) el("t-talep-eden-yeni").value = "";
 });
 
 el("ti-temsilci").addEventListener("change", ()=>{
@@ -1975,20 +2123,62 @@ el("kesimhane-donus-form").addEventListener("submit", async (ev)=>{
 
 let talepForNumuneId = null;
 
-function openTalepModal(numuneId){
+async function openTalepModal(numuneId){
   talepForNumuneId = numuneId;
   el("talep-form").reset();
   el("talep-form-error").hidden = true;
+  el("talep-eden-yeni-wrap").hidden = true;
+  await loadTalepEdenKisiler();
   el("modal-talep").hidden = false;
 }
 el("talep-cancel").addEventListener("click", ()=> el("modal-talep").hidden = true);
 
 el("talep-form").addEventListener("submit", async (ev)=>{
   ev.preventDefault();
+  const e = el("talep-form-error");
+  e.hidden = true;
+
+  const talepEdenSecim = el("t-talep-eden").value;
+  let talepEdenAdi = talepEdenSecim;
+
   const btn = el("talep-save");
   btn.disabled = true;
+
+  if(talepEdenSecim === "__new__"){
+    const yeniAd = el("t-talep-eden-yeni").value.trim();
+    if(!yeniAd){
+      e.textContent = "Yeni kişi adını yazın.";
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const kisiRes = await fetch("/api/talep-eden-kisiler", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ad: yeniAd }),
+    });
+    if(!kisiRes.ok){
+      const data = await kisiRes.json().catch(()=>({}));
+      e.textContent = "Kişi eklenemedi: " + (data.error || kisiRes.status);
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const kisiData = await kisiRes.json();
+    talepEdenAdi = kisiData.kisi.ad;
+  }
+
+  if(!talepEdenAdi || talepEdenSecim === ""){
+    e.textContent = "Talep eden kişiyi seçin.";
+    e.hidden = false;
+    btn.disabled = false;
+    return;
+  }
+
   const payload = {
     numune_id: talepForNumuneId,
+    talep_eden_adi: talepEdenAdi,
     not: el("t-not").value.trim() || null,
   };
 
@@ -2002,7 +2192,6 @@ el("talep-form").addEventListener("submit", async (ev)=>{
 
   if(!res.ok){
     const data = await res.json().catch(()=>({}));
-    const e = el("talep-form-error");
     if(res.status === 409){
       e.textContent = "Bu numune için zaten bekleyen bir talep var.";
     } else if(res.status === 403){
