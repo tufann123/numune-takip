@@ -14,6 +14,9 @@ export async function onRequestGet(context) {
 
 // Talep olusturma editor/viewer ayrimi yapilmaz: herhangi bir giris yapmis
 // kullanici (tipik olarak viewer) bir numune icin talepte bulunabilir.
+// talep_eden_adi: formda coktan secmeli listeden secilen gercek kisi adi -
+// paylasilan bir viewer hesabi (orn. narkon) birden fazla kisi tarafindan
+// kullanilabildigi icin, talebi fiilen kimin yaptigini ayirt etmek icin zorunlu.
 export async function onRequestPost(context) {
   const user = await getUser(context);
   if (!user) return json({ error: "unauthenticated" }, 401);
@@ -21,6 +24,10 @@ export async function onRequestPost(context) {
   const body = await context.request.json().catch(() => null);
   if (!body || !body.numune_id) {
     return json({ error: "numune_id zorunludur." }, 400);
+  }
+  const talepEdenAdi = (body.talep_eden_adi || "").trim();
+  if (!talepEdenAdi) {
+    return json({ error: "Talep eden kişi zorunludur." }, 400);
   }
 
   const existing = await context.env.DB
@@ -37,7 +44,7 @@ export async function onRequestPost(context) {
       `INSERT INTO talepler (id, numune_id, talep_eden_email, talep_eden_ad, not_)
        VALUES (?, ?, ?, ?, ?)`
     )
-    .bind(id, body.numune_id, user.email, user.ad_soyad, body.not || null)
+    .bind(id, body.numune_id, user.email, talepEdenAdi, body.not || null)
     .run();
 
   // Editorlere push bildirimi gonder - basarisiz olursa talep olusturma yanitini etkilemesin.
@@ -49,7 +56,7 @@ export async function onRequestPost(context) {
     const adi = numune?.numune_adi ? ` (${numune.numune_adi})` : "";
     await notifyEditors(context.env, {
       title: "Yeni numune talebi",
-      body: `${user.ad_soyad} bir talep gönderdi${adi}.`,
+      body: `${talepEdenAdi} bir talep gönderdi${adi}.`,
       url: "/",
     });
   } catch (err) {
