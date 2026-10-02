@@ -25,11 +25,15 @@ export async function onRequestPost(context) {
   }
   const temsilciAdi = (body.temsilci_adi || "").trim();
   const teslimTarihi = (body.teslim_tarihi || "").trim();
+  const iadeEdenAdi = (body.iade_eden_adi || "").trim();
   if (!temsilciAdi) {
     return json({ error: "Müşteri temsilcisi zorunludur." }, 400);
   }
   if (!teslimTarihi) {
     return json({ error: "Teslim tarihi zorunludur." }, 400);
+  }
+  if (!iadeEdenAdi) {
+    return json({ error: "İade eden kişi zorunludur." }, 400);
   }
 
   const dagitim = await context.env.DB
@@ -55,14 +59,14 @@ export async function onRequestPost(context) {
       `INSERT INTO temsilci_iade_talepleri (id, dagitim_id, talep_eden_email, talep_eden_ad, not_, temsilci_adi, teslim_tarihi)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .bind(id, body.dagitim_id, user.email, user.ad_soyad, body.not || null, temsilciAdi, teslimTarihi)
+    .bind(id, body.dagitim_id, user.email, iadeEdenAdi, body.not || null, temsilciAdi, teslimTarihi)
     .run();
 
   // Editorlere push bildirimi gonder - basarisiz olursa yaniti etkilemesin.
   try {
     await notifyEditors(context.env, {
       title: "Müşteri temsilcisine iade bildirimi",
-      body: `${user.ad_soyad}, ${temsilciAdi} temsilcisine iade bildirdi.`,
+      body: `${iadeEdenAdi}, ${temsilciAdi} temsilcisine iade bildirdi.`,
       url: "/",
     });
   } catch (err) {
