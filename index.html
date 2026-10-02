@@ -674,6 +674,16 @@
     <div id="temsilci-iade-form-error" class="error-msg" hidden></div>
     <form id="temsilci-iade-form">
       <p class="hint" style="margin:0 0 16px;">Bu numuneyi müşteri temsilcisine iade ettiğinizi bildiriyorsunuz. Onay için düzenleyiciye gönderilecek.</p>
+      <label>İade Eden Kişi *</label>
+      <select id="ti-iade-eden" required>
+        <option value="" disabled selected>Seçiniz...</option>
+        <option value="__new__">+ Yeni kişi ekle...</option>
+      </select>
+      <button type="button" class="link-btn" id="ti-iade-eden-yonet-btn">Kişileri yönet</button>
+      <div class="musteri-yeni-wrap" id="ti-iade-eden-yeni-wrap" hidden>
+        <label>Yeni Kişi Adı *</label>
+        <input type="text" id="ti-iade-eden-yeni" placeholder="Adını yazın" />
+      </div>
       <label>Müşteri Temsilcisi *</label>
       <select id="ti-temsilci" required>
         <option value="" disabled selected>Seçiniz...</option>
@@ -723,7 +733,7 @@
 
 <div class="modal-backdrop" id="modal-talep-eden-kisiler" hidden>
   <div class="modal">
-    <h2>Talep Eden Kişileri Yönet</h2>
+    <h2>Kişileri Yönet</h2>
     <div style="display:flex; gap:8px; align-items:flex-start;">
       <input type="text" id="talep-eden-yeni-ad" placeholder="Yeni kişi adı" style="flex:1; margin-bottom:0;" />
       <button type="button" class="btn-primary btn-small" id="talep-eden-ekle-btn">Ekle</button>
@@ -1555,19 +1565,8 @@ async function loadTemsilciler(){
   }
 }
 
-async function loadTalepEdenKisiler(){
-  const sel = el("t-talep-eden");
+function populateKisiSelect(sel){
   const prevValue = sel.value;
-  try{
-    const res = await fetch("/api/talep-eden-kisiler", { credentials: "same-origin" });
-    if(res.ok){
-      const data = await res.json();
-      talepEdenKisiListesi = data.kisiler || [];
-    }
-  } catch(err){
-    talepEdenKisiListesi = talepEdenKisiListesi || [];
-  }
-
   sel.innerHTML = `<option value="" disabled>Seçiniz...</option>`;
   talepEdenKisiListesi.forEach(k=>{
     const opt = document.createElement("option");
@@ -1585,6 +1584,21 @@ async function loadTalepEdenKisiler(){
   } else {
     sel.value = "";
   }
+}
+
+async function loadTalepEdenKisiler(){
+  try{
+    const res = await fetch("/api/talep-eden-kisiler", { credentials: "same-origin" });
+    if(res.ok){
+      const data = await res.json();
+      talepEdenKisiListesi = data.kisiler || [];
+    }
+  } catch(err){
+    talepEdenKisiListesi = talepEdenKisiListesi || [];
+  }
+
+  populateKisiSelect(el("t-talep-eden"));
+  populateKisiSelect(el("ti-iade-eden"));
 }
 
 async function renderMusterilerListesi(){
@@ -1744,6 +1758,33 @@ async function renderTalepEdenKisilerListesi(){
       name.textContent = k.ad;
       row.appendChild(name);
       if(currentUser?.rol === "editor"){
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "btn-secondary btn-small";
+        editBtn.textContent = "Düzenle";
+        editBtn.addEventListener("click", async ()=>{
+          const yeniAd = prompt("Yeni isim:", k.ad);
+          if(yeniAd === null) return;
+          const trimmed = yeniAd.trim();
+          if(!trimmed || trimmed === k.ad) return;
+          editBtn.disabled = true;
+          const putRes = await fetch(`/api/talep-eden-kisiler/${encodeURIComponent(k.id)}`, {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ad: trimmed }),
+          });
+          if(!putRes.ok){
+            const d = await putRes.json().catch(()=>({}));
+            alert("Güncellenemedi: " + (d.error || putRes.status));
+            editBtn.disabled = false;
+            return;
+          }
+          await renderTalepEdenKisilerListesi();
+          await loadTalepEdenKisiler();
+        });
+        row.appendChild(editBtn);
+
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "btn-danger btn-small";
@@ -1812,6 +1853,17 @@ el("t-talep-eden").addEventListener("change", ()=>{
   const isNew = el("t-talep-eden").value === "__new__";
   el("talep-eden-yeni-wrap").hidden = !isNew;
   if(!isNew) el("t-talep-eden-yeni").value = "";
+});
+
+el("ti-iade-eden-yonet-btn").addEventListener("click", async ()=>{
+  el("modal-talep-eden-kisiler").hidden = false;
+  await renderTalepEdenKisilerListesi();
+});
+
+el("ti-iade-eden").addEventListener("change", ()=>{
+  const isNew = el("ti-iade-eden").value === "__new__";
+  el("ti-iade-eden-yeni-wrap").hidden = !isNew;
+  if(!isNew) el("ti-iade-eden-yeni").value = "";
 });
 
 el("ti-temsilci").addEventListener("change", ()=>{
@@ -2216,8 +2268,10 @@ async function openTemsilciIadeModal(dagitimId){
   el("temsilci-iade-form").reset();
   el("temsilci-iade-form-error").hidden = true;
   el("temsilci-yeni-wrap").hidden = true;
+  el("ti-iade-eden-yeni-wrap").hidden = true;
   el("ti-teslim-tarihi").value = todayStr();
   await loadTemsilciler();
+  await loadTalepEdenKisiler();
   el("modal-temsilci-iade").hidden = false;
 }
 el("temsilci-iade-cancel").addEventListener("click", ()=> el("modal-temsilci-iade").hidden = true);
@@ -2229,10 +2283,44 @@ el("temsilci-iade-form").addEventListener("submit", async (ev)=>{
 
   const temsilciSecim = el("ti-temsilci").value;
   let temsilciAdi = temsilciSecim;
+  const iadeEdenSecim = el("ti-iade-eden").value;
+  let iadeEdenAdi = iadeEdenSecim;
   const teslimTarihi = el("ti-teslim-tarihi").value;
 
   const btn = el("temsilci-iade-save");
   btn.disabled = true;
+
+  if(iadeEdenSecim === "__new__"){
+    const yeniAd = el("ti-iade-eden-yeni").value.trim();
+    if(!yeniAd){
+      e.textContent = "Yeni kişi adını yazın.";
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const iadeEdenRes = await fetch("/api/talep-eden-kisiler", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ad: yeniAd }),
+    });
+    if(!iadeEdenRes.ok){
+      const data = await iadeEdenRes.json().catch(()=>({}));
+      e.textContent = "Kişi eklenemedi: " + (data.error || iadeEdenRes.status);
+      e.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const iadeEdenData = await iadeEdenRes.json();
+    iadeEdenAdi = iadeEdenData.kisi.ad;
+  }
+
+  if(!iadeEdenAdi || iadeEdenSecim === ""){
+    e.textContent = "İade eden kişiyi seçin.";
+    e.hidden = false;
+    btn.disabled = false;
+    return;
+  }
 
   if(temsilciSecim === "__new__"){
     const yeniAd = el("ti-temsilci-yeni").value.trim();
@@ -2275,6 +2363,7 @@ el("temsilci-iade-form").addEventListener("submit", async (ev)=>{
   const payload = {
     dagitim_id: temsilciIadeForDagitimId,
     temsilci_adi: temsilciAdi,
+    iade_eden_adi: iadeEdenAdi,
     teslim_tarihi: teslimTarihi,
     not: el("ti-not").value.trim() || null,
   };
