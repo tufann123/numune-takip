@@ -28,28 +28,30 @@ export async function onRequestPut(context) {
     );
   }
 
-  // Ayni musteri + model/siparis no + renk kombinasyonuyla baska bir kayit
-  // varsa (kendisi haric) coklamayi engelle.
+  const pps_numunesi = body?.pps_numunesi ? 1 : 0;
+
+  // Ayni musteri + model/siparis no + renk + PPS durumu kombinasyonuyla baska
+  // bir kayit varsa (kendisi haric) coklamayi engelle. Ayni modelin PPS
+  // numunesi ile normal numunesi ayri kayit olarak tutulabilir.
   const duplicate = await context.env.DB
     .prepare(
       `SELECT id, numune_adi FROM numuneler
        WHERE lower(trim(musteri)) = lower(?)
          AND lower(trim(model_siparis_no)) = lower(?)
          AND lower(trim(renk)) = lower(?)
+         AND COALESCE(pps_numunesi, 0) = ?
          AND id != ?`
     )
-    .bind(musteri, model_siparis_no, renk, id)
+    .bind(musteri, model_siparis_no, renk, pps_numunesi, id)
     .first();
   if (duplicate) {
     return json(
       {
-        error: `Bu müşteri, model/sipariş no ve renk kombinasyonuyla zaten bir kayıt var: "${duplicate.numune_adi}"`,
+        error: `Bu müşteri, model/sipariş no, renk ve PPS durumu kombinasyonuyla zaten bir kayıt var: "${duplicate.numune_adi}"`,
       },
       409
     );
   }
-
-  const pps_numunesi = body?.pps_numunesi ? 1 : 0;
 
   await context.env.DB
     .prepare(
