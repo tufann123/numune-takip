@@ -410,6 +410,13 @@
     grid-template-columns:1fr 1fr;
     gap:0 12px;
   }
+  .dagitim-duzenle-row{
+    display:grid;
+    grid-template-columns:140px 110px 1fr;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .dagitim-duzenle-row input,.dagitim-duzenle-row select{margin-bottom:0;}
   footer.hint{
     text-align:center;
     color:var(--muted);
@@ -570,6 +577,10 @@
       <label class="checkbox-row"><input type="checkbox" id="f-pps" /> Bu numune PPS numunesidir</label>
       <label>Açıklama</label>
       <textarea id="f-aciklama"></textarea>
+      <div id="dagitim-duzenle-wrap" hidden>
+        <label>Dağıtım Kayıtları (tarih / tip / kime verildiği düzeltilebilir)</label>
+        <div id="dagitim-duzenle-liste"></div>
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn-danger" id="numune-delete" style="margin-right:auto" hidden>Sil</button>
         <button type="button" class="btn-secondary" id="numune-cancel">Vazgeç</button>
@@ -1182,12 +1193,15 @@ function renderTable(){
     }
 
     const pending = pendingTalepFor(n.id);
+    // Numune su an kesimhanedeyse (hic cikmamis, kesimhaneye iade edilmis ya da
+    // musteri temsilciliginden donmus) viewer tekrar talep edebilir.
+    const kesimhanede = count === 0 || (!!son.iade_tarihi && (son.iade_hedef !== "musteri_temsilcisi" || !!son.kesimhane_donus_tarihi));
     let talepHtml = "-";
     if(pendingTemsilci){
       talepHtml = `<span class="status-pill status-temsilci">Temsilciye İade Onayı Bekliyor</span>`;
     } else if(pending){
       talepHtml = `<span class="status-pill status-talep">Talep Edildi</span>`;
-    } else if(count === 0 && currentUser?.rol !== "editor"){
+    } else if(kesimhanede && currentUser?.rol !== "editor"){
       talepHtml = `<button type="button" class="btn-secondary btn-small btn-talep-et" data-id="${escapeHtml(n.id)}">Talep Et</button>`;
     } else if(count > 0 && son && !son.iade_tarihi && currentUser?.rol !== "editor"){
       talepHtml = `<button type="button" class="btn-secondary btn-small btn-temsilci-iade" data-id="${escapeHtml(son.id)}">Müşteri Temsilcisine İade Edildi</button>`;
@@ -1890,6 +1904,7 @@ el("open-new-numune").addEventListener("click", async ()=>{
   el("numune-modal-title").textContent = "Yeni Numune / Kartela";
   el("numune-save").textContent = "Kaydet";
   el("numune-delete").hidden = true;
+  el("dagitim-duzenle-wrap").hidden = true;
   await loadMusteriler();
   el("modal-numune").hidden = false;
 });
@@ -1951,6 +1966,25 @@ async function openEditNumuneModal(n){
   el("f-renk").value = n.renk || "";
   el("f-aciklama").value = n.aciklama || "";
   el("f-pps").checked = !!n.pps_numunesi;
+
+  const dWrap = el("dagitim-duzenle-wrap");
+  const dListe = el("dagitim-duzenle-liste");
+  dListe.innerHTML = "";
+  const dList = n.dagitimlar || [];
+  dWrap.hidden = dList.length === 0;
+  dList.forEach(d=>{
+    const row = document.createElement("div");
+    row.className = "dagitim-duzenle-row";
+    row.dataset.id = d.id;
+    row.dataset.tarih = d.dagitim_tarihi || "";
+    row.dataset.tip = d.tip === "uretim" ? "uretim" : "fason";
+    row.dataset.kime = d.kime || "";
+    row.innerHTML = '<input type="date" class="dd-tarih" /><select class="dd-tip"><option value="uretim">Üretim</option><option value="fason">Fason</option></select><input type="text" class="dd-kime" placeholder="Kime verildi" />';
+    row.querySelector(".dd-tarih").value = d.dagitim_tarihi || "";
+    row.querySelector(".dd-tip").value = row.dataset.tip;
+    row.querySelector(".dd-kime").value = d.kime || "";
+    dListe.appendChild(row);
+  });
 
   el("modal-numune").hidden = false;
 }
@@ -2031,6 +2065,32 @@ el("numune-form").addEventListener("submit", async (ev)=>{
     }
     e.hidden = false;
     return;
+  }
+  if(isEdit){
+    const rows = [...document.querySelectorAll("#dagitim-duzenle-liste .dagitim-duzenle-row")];
+    const failed = [];
+    for(const row of rows){
+      const tarih = row.querySelector(".dd-tarih").value;
+      const tip = row.querySelector(".dd-tip").value;
+      const kime = row.querySelector(".dd-kime").value.trim();
+      if(tarih === row.dataset.tarih && tip === row.dataset.tip && kime === row.dataset.kime) continue;
+      const dRes = await fetch(`/api/dagitimlar/${encodeURIComponent(row.dataset.id)}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dagitim_tarihi: tarih, tip, kime }),
+      });
+      if(!dRes.ok){
+        const d = await dRes.json().catch(()=>({}));
+        failed.push(d.error || dRes.status);
+      }
+    }
+    if(failed.length){
+      e.textContent = "Numune güncellendi ancak dağıtım kaydı düzeltilemedi: " + failed[0];
+      e.hidden = false;
+      await loadNumuneler();
+      return;
+    }
   }
   el("modal-numune").hidden = true;
   showToast(isEdit ? "Numune güncellendi." : "Numune kaydedildi.");
