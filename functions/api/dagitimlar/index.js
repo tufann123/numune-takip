@@ -1,4 +1,5 @@
 import { getUser, json, newId } from "../../_lib.js";
+import { notifyUser } from "../../_webpush.js";
 
 export async function onRequestGet(context) {
   const user = await getUser(context);
@@ -45,6 +46,17 @@ export async function onRequestPost(context) {
 
   // Bu numune icin bekleyen bir talep varsa, dagitim yapildigi icin
   // otomatik olarak "tamamlandi" olarak isaretle.
+  // (Bildirim icin bekleyen talepleri ve numune bilgisini onceden al.)
+  const bekleyenler = await context.env.DB
+    .prepare(
+      `SELECT t.talep_eden_email, t.talep_eden_ad, n.numune_adi, n.musteri
+       FROM talepler t
+       LEFT JOIN numuneler n ON n.id = t.numune_id
+       WHERE t.numune_id = ? AND t.durum = 'bekliyor'`
+    )
+    .bind(body.numune_id)
+    .all();
+
   await context.env.DB
     .prepare(
       `UPDATE talepler
@@ -53,6 +65,21 @@ export async function onRequestPost(context) {
     )
     .bind(user.email, body.numune_id)
     .run();
+
+  // Talep eden hesaplara "numune hazir" bildirimi - basarisiz olursa yaniti etkilemesin.
+  try {
+    for (const t of bekleyenler.results || []) {
+      if (!t.talep_eden_email) continue;
+      const ad = t.numune_adi || "Talep ettiğiniz numune";
+      await notifyUser(context.env, t.talep_eden_email, {
+        title: "Numune hazır",
+        body: `${ad}${t.musteri ? " (" + t.musteri + ")" : ""} hazırlandı ve ${body.kime} için dağıtıldı.${t.talep_eden_ad ? " Talep eden: " + t.talep_eden_ad : ""}`,
+        url: "/",
+      });
+    }
+  } catch (err) {
+    // yoksay
+  }
 
   return json({ id }, 201);
 }
