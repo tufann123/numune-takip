@@ -246,6 +246,11 @@
   .status-dagitildi{background:#e6f0ea;color:var(--primary-dark);}
   .status-talep{background:#fde8e6;color:#9c3a2f;}
   .status-temsilci{background:#eaf1fb;color:#2c5aa0;}
+  .status-hazir{background:#e3f4e8;color:#1f7a3d;}
+  .modal.modal-wide{max-width:1100px;}
+  .talep-gecmis-filtre{display:grid;grid-template-columns:1fr 140px 150px 150px;gap:8px;margin-bottom:12px;}
+  .talep-gecmis-ozet{margin-bottom:10px;font-size:var(--fs-sm);color:#555;}
+  @media (max-width:700px){ .talep-gecmis-filtre{grid-template-columns:1fr 1fr;} }
   .status-pill .status-sub{font-weight:500;opacity:.85;margin-left:2px;}
 
   .talep-card{
@@ -499,6 +504,7 @@
       <input type="text" id="search-input" placeholder="Ara: numune adı, müşteri, model..." />
       <span class="count-pill" id="count-pill"></span>
       <div class="spacer"></div>
+      <button class="btn-secondary" id="open-talep-gecmisi">Talep Geçmişi</button>
       <button class="btn-primary" id="open-new-numune" hidden>+ Yeni Numune</button>
     </div>
 
@@ -742,6 +748,44 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-talep-gecmisi" hidden>
+  <div class="modal modal-wide">
+    <h2>Talep Geçmişi</h2>
+    <div class="talep-gecmis-filtre">
+      <input type="text" id="tg-ara" placeholder="Ara: numune, müşteri, model, talep eden..." />
+      <select id="tg-durum">
+        <option value="">Tümü</option>
+        <option value="bekliyor">Bekleyen</option>
+        <option value="tamamlandi">Hazır olan</option>
+      </select>
+      <input type="date" id="tg-baslangic" title="Talep tarihi (başlangıç)" />
+      <input type="date" id="tg-bitis" title="Talep tarihi (bitiş)" />
+    </div>
+    <div class="talep-gecmis-ozet" id="tg-ozet"></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Numune</th>
+            <th>Müşteri</th>
+            <th>Model · Renk</th>
+            <th>Talep Eden</th>
+            <th>Talep Edildi</th>
+            <th>Hazır Olduğu</th>
+            <th>Süre</th>
+            <th>Durum</th>
+          </tr>
+        </thead>
+        <tbody id="tg-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="tg-csv">CSV İndir</button>
+      <button type="button" class="btn-secondary" id="tg-kapat">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-talep-eden-kisiler" hidden>
   <div class="modal">
     <h2>Kişileri Yönet</h2>
@@ -865,7 +909,7 @@ el("notif-permission-btn")?.addEventListener("click", async ()=>{
   try{
     const sonuc = await Notification.requestPermission();
     if(sonuc === "granted"){
-      showBrowserNotification("Bildirimler açık", "Yeni bir talep geldiğinde burada bildirim göreceksiniz. Bu test bildirimidir.");
+      showBrowserNotification("Bildirimler açık", "Talep ve hazır numune bildirimleri burada görünecek. Bu test bildirimidir.");
     }
   } catch(err){
     // yoksay
@@ -950,7 +994,8 @@ function showApp(){
     badge.textContent = "Görüntüleyici";
     badge.className = "badge badge-viewer";
     el("open-new-numune").hidden = true;
-    stopPolling();
+    startPolling();
+    updateNotifPermissionBtn();
   }
   loadNumuneler();
 }
@@ -1035,6 +1080,24 @@ async function loadNumuneler(){
   renderPendingTemsilciIadeleri();
 }
 
+function sonHazirTalepFor(n){
+  const ms = function(s){
+    if(!s) return 0;
+    const str = String(s);
+    const d = new Date(str.replace(" ", "T") + (str.endsWith("Z") ? "" : "Z"));
+    return isNaN(d) ? 0 : d.getTime();
+  };
+  const sonDag = Math.max(0, ...(n.dagitimlar || []).map(function(d){ return ms(d.created_at); }));
+  let best = null;
+  talepler.forEach(function(t){
+    if(t.numune_id === n.id && t.durum === "tamamlandi" && t.tamamlanma_tarihi){
+      if(!best || ms(t.tamamlanma_tarihi) > ms(best.tamamlanma_tarihi)) best = t;
+    }
+  });
+  // Hazir bilgisi, hazirlandiktan sonra numune bir kez daha dagitilana kadar gecerlidir.
+  return best && ms(best.tamamlanma_tarihi) > sonDag + 60000 ? best : null;
+}
+
 function pendingTalepFor(numuneId){
   return talepler.find(t => t.numune_id === numuneId && t.durum === "bekliyor") || null;
 }
@@ -1081,8 +1144,38 @@ let knownPendingTalepIds = null;
 let knownPendingTemsilciIds = null;
 let pollHandle = null;
 
+let knownViewerPendingIds = null;
+
+// Goruntuleyici: kendi hesabiyla verdigi talepler hazirlandi (tamamlandi) olduysa haber verir.
+async function checkViewerHazir(){
+  try{
+    const res = await fetch("/api/talepler", { credentials: "same-origin" });
+    if(!res.ok) return;
+    const { talepler: taleps } = await res.json();
+    const own = (taleps || []).filter(function(t){ return t.talep_eden_email === currentUser.email; });
+    const pendingNow = new Set(own.filter(function(t){ return t.durum === "bekliyor"; }).map(function(t){ return t.id; }));
+    const hazirOlanlar = [];
+    if(knownViewerPendingIds){
+      own.forEach(function(t){
+        if(t.durum === "tamamlandi" && knownViewerPendingIds.has(t.id)) hazirOlanlar.push(t);
+      });
+    }
+    knownViewerPendingIds = pendingNow;
+    if(hazirOlanlar.length > 0){
+      hazirOlanlar.forEach(function(t){
+        const n = numuneler.find(function(x){ return x.id === t.numune_id; });
+        const ad = n ? formatAdi(n.numune_adi) : "Numune";
+        showNotifyToast(ad + " hazır." + (t.talep_eden_ad ? " (Talep eden: " + t.talep_eden_ad + ")" : ""));
+      });
+      await loadNumuneler();
+    }
+  } catch(err){
+    // sessizce yut, bir sonraki pollde tekrar denenecek
+  }
+}
+
 async function checkForNewTalepler(){
-  if(currentUser?.rol !== "editor") return;
+  if(currentUser?.rol !== "editor"){ await checkViewerHazir(); return; }
   try{
     const [talepRes, temsilciRes] = await Promise.all([
       fetch("/api/talepler", { credentials: "same-origin" }),
@@ -1131,6 +1224,7 @@ function stopPolling(){
   }
   knownPendingTalepIds = null;
   knownPendingTemsilciIds = null;
+  knownViewerPendingIds = null;
 }
 
 /* ------------------------- GORUNTULEME ------------------------- */
@@ -1205,6 +1299,11 @@ function renderTable(){
       talepHtml = `<button type="button" class="btn-secondary btn-small btn-talep-et" data-id="${escapeHtml(n.id)}">Talep Et</button>`;
     } else if(count > 0 && son && !son.iade_tarihi && currentUser?.rol !== "editor"){
       talepHtml = `<button type="button" class="btn-secondary btn-small btn-temsilci-iade" data-id="${escapeHtml(son.id)}">Müşteri Temsilcisine İade Edildi</button>`;
+    }
+
+    const hazirTalep = (kesimhanede && !pending && !pendingTemsilci) ? sonHazirTalepFor(n) : null;
+    if(hazirTalep){
+      talepHtml = '<span class="status-pill status-hazir">Hazır ✓ <span class="status-sub">(' + fmtDateTime(hazirTalep.tamamlanma_tarihi) + ')</span></span>';
     }
 
     const tr = document.createElement("tr");
@@ -2450,6 +2549,139 @@ el("temsilci-iade-form").addEventListener("submit", async (ev)=>{
   showToast("Bildiriminiz düzenleyiciye onay için gönderildi.");
   await loadNumuneler();
 });
+
+/* ------------------------- TALEP GECMISI ------------------------- */
+
+function utcDate(s){
+  if(!s) return null;
+  const str = String(s);
+  let iso = str.length > 10 ? str.replace(" ", "T") : str + "T00:00:00";
+  if(str.length > 10 && !iso.endsWith("Z")) iso += "Z";
+  const d = new Date(iso);
+  return isNaN(d) ? null : d;
+}
+
+function fmtSureMs(ms){
+  if(ms == null || isNaN(ms)) return "-";
+  let dk = Math.max(0, Math.round(ms / 60000));
+  const gun = Math.floor(dk / 1440); dk -= gun * 1440;
+  const sa = Math.floor(dk / 60); dk -= sa * 60;
+  const parts = [];
+  if(gun) parts.push(gun + " gün");
+  if(sa) parts.push(sa + " sa");
+  if(dk || !parts.length) parts.push(dk + " dk");
+  return parts.join(" ");
+}
+
+function talepSuresiMs(t){
+  const a = utcDate(t.created_at), b = utcDate(t.tamamlanma_tarihi);
+  return (a && b) ? (b - a) : null;
+}
+
+function talepDurumLabel(t){
+  if(t.durum === "tamamlandi") return "Hazır";
+  if(t.durum === "bekliyor") return "Bekliyor";
+  return t.durum || "-";
+}
+
+function talepGecmisiSatirlari(){
+  const q = el("tg-ara").value.trim().toLocaleLowerCase("tr-TR");
+  const durum = el("tg-durum").value;
+  const bas = el("tg-baslangic").value;
+  const bit = el("tg-bitis").value;
+  const nm = {};
+  numuneler.forEach(function(n){ nm[n.id] = n; });
+  return talepler.map(function(t){ return { t: t, n: nm[t.numune_id] || null }; }).filter(function(x){
+    const t = x.t, n = x.n;
+    if(durum && t.durum !== durum) return false;
+    const d = utcDate(t.created_at);
+    const gun = d ? d.toLocaleDateString("sv-SE") : "";
+    if(bas && gun < bas) return false;
+    if(bit && gun > bit) return false;
+    if(q){
+      const hay = [n && n.numune_adi, n && n.musteri, n && n.model_siparis_no, n && n.renk, t.talep_eden_ad, t.talep_eden_email]
+        .filter(Boolean).join(" ").toLocaleLowerCase("tr-TR");
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort(function(a, b){
+    const da = utcDate(a.t.created_at), db = utcDate(b.t.created_at);
+    return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+  });
+}
+
+function renderTalepGecmisi(){
+  const rows = talepGecmisiSatirlari();
+  const tbody = el("tg-tbody");
+  tbody.innerHTML = "";
+  if(rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-note">Kayıt bulunamadı.</td></tr>';
+  }
+  rows.forEach(function(x){
+    const t = x.t, n = x.n;
+    const tr = document.createElement("tr");
+    const modelRenk = n ? [formatAdi(n.model_siparis_no), formatAdi(n.renk)].filter(Boolean).join(" · ") : "";
+    tr.innerHTML =
+      '<td><strong>' + escapeHtml(n ? formatAdi(n.numune_adi) : "(silinmiş numune)") + '</strong>' + (n && n.pps_numunesi ? '<span class="badge-pps">PPS</span>' : '') + '</td>' +
+      '<td>' + escapeHtml((n && n.musteri) || "-") + '</td>' +
+      '<td>' + escapeHtml(modelRenk || "-") + '</td>' +
+      '<td>' + escapeHtml(t.talep_eden_ad || t.talep_eden_email || "-") + '</td>' +
+      '<td>' + fmtDateTime(t.created_at) + '</td>' +
+      '<td>' + (t.tamamlanma_tarihi ? fmtDateTime(t.tamamlanma_tarihi) : "-") + '</td>' +
+      '<td>' + (t.tamamlanma_tarihi ? fmtSureMs(talepSuresiMs(t)) : "-") + '</td>' +
+      '<td><span class="status-pill ' + (t.durum === "tamamlandi" ? "status-hazir" : "status-bekliyor") + '">' + escapeHtml(talepDurumLabel(t)) + '</span></td>';
+    tbody.appendChild(tr);
+  });
+  const hazir = rows.filter(function(x){ return x.t.durum === "tamamlandi"; });
+  const sureler = hazir.map(function(x){ return talepSuresiMs(x.t); }).filter(function(v){ return v != null; });
+  const ort = sureler.length ? sureler.reduce(function(a, b){ return a + b; }, 0) / sureler.length : null;
+  el("tg-ozet").textContent = rows.length + " talep · " + hazir.length + " hazır · " + (rows.length - hazir.length) + " bekleyen/diğer" + (ort != null ? " · Ortalama hazırlanma süresi: " + fmtSureMs(ort) : "");
+}
+
+function talepGecmisiCsv(){
+  const rows = talepGecmisiSatirlari();
+  const cell = function(v){ return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
+  const lines = [["Numune", "Müşteri", "Model/Sipariş No", "Renk", "PPS", "Talep Eden", "Talep Edildi", "Hazır Olduğu", "Süre", "Durum"].map(cell).join(";")];
+  rows.forEach(function(x){
+    const t = x.t, n = x.n;
+    lines.push([
+      n ? formatAdi(n.numune_adi) : "(silinmiş numune)",
+      n ? (n.musteri || "") : "",
+      n ? (n.model_siparis_no || "") : "",
+      n ? (n.renk || "") : "",
+      n && n.pps_numunesi ? "Evet" : "Hayır",
+      t.talep_eden_ad || t.talep_eden_email || "",
+      fmtDateTime(t.created_at),
+      t.tamamlanma_tarihi ? fmtDateTime(t.tamamlanma_tarihi) : "",
+      t.tamamlanma_tarihi ? fmtSureMs(talepSuresiMs(t)) : "",
+      talepDurumLabel(t),
+    ].map(cell).join(";"));
+  });
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "talep-gecmisi.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+}
+
+el("open-talep-gecmisi").addEventListener("click", async function(){
+  try{
+    const r = await fetch("/api/talepler", { credentials: "same-origin" });
+    if(r.ok){ const d = await r.json(); talepler = d.talepler || []; }
+  } catch(err){
+    // eldeki veriyle devam
+  }
+  renderTalepGecmisi();
+  el("modal-talep-gecmisi").hidden = false;
+});
+["tg-ara"].forEach(function(id){ el(id).addEventListener("input", renderTalepGecmisi); });
+["tg-durum", "tg-baslangic", "tg-bitis"].forEach(function(id){ el(id).addEventListener("change", renderTalepGecmisi); });
+el("tg-csv").addEventListener("click", talepGecmisiCsv);
+el("tg-kapat").addEventListener("click", function(){ el("modal-talep-gecmisi").hidden = true; });
+el("modal-talep-gecmisi").addEventListener("click", function(ev){ if(ev.target === el("modal-talep-gecmisi")) el("modal-talep-gecmisi").hidden = true; });
 
 init();
 </script>
