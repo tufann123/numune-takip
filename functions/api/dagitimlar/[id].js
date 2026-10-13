@@ -15,6 +15,27 @@ export async function onRequestPut(context) {
 
   const body = await context.request.json().catch(() => null);
 
+  // Dagitim kaydinin kendisini duzeltme: tarih, tip (uretim/fason) ve kime verildigi
+  if (body?.kime !== undefined || body?.tip !== undefined) {
+    const dagitim_tarihi = (body?.dagitim_tarihi || "").trim();
+    const tip = (body?.tip || "").trim();
+    const kime = (body?.kime || "").trim();
+
+    if (!dagitim_tarihi || !tip || !kime) {
+      return json({ error: "Tarih, tip ve kime verildiği alanları zorunludur." }, 400);
+    }
+    if (!["uretim", "fason"].includes(tip)) {
+      return json({ error: "Geçersiz tip." }, 400);
+    }
+
+    await context.env.DB
+      .prepare("UPDATE dagitimlar SET dagitim_tarihi = ?, tip = ?, kime = ? WHERE id = ?")
+      .bind(dagitim_tarihi, tip, kime, id)
+      .run();
+
+    return json({ ok: true });
+  }
+
   // Ikinci asama: musteri temsilciliginden kesimhaneye geri alma
   if (body?.kesimhane_donus_tarihi !== undefined) {
     const kesimhaneDonusTarihi = (body?.kesimhane_donus_tarihi || "").trim();
