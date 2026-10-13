@@ -153,3 +153,24 @@ export async function notifyEditors(env, payloadObj) {
     }
   }
 }
+
+// Belirli bir kullanicinin (e-posta) tum tarayici/cihaz aboneliklerine bildirim gonderir
+// (orn. talep ettigi numune hazir oldugunda talep eden hesaba).
+export async function notifyUser(env, email, payloadObj) {
+  const { results } = await env.DB
+    .prepare("SELECT id, endpoint, p256dh, auth FROM push_abonelikleri WHERE email = ?")
+    .bind(email)
+    .all();
+
+  for (const row of results || []) {
+    const subscription = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } };
+    try {
+      const result = await sendWebPush(subscription, payloadObj, env);
+      if (result.expired) {
+        await env.DB.prepare("DELETE FROM push_abonelikleri WHERE id = ?").bind(row.id).run();
+      }
+    } catch (err) {
+      // Tek bir aboneliğin başarısız olması diğerlerini etkilemesin.
+    }
+  }
+}
