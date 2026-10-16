@@ -602,7 +602,7 @@
     <div id="dagitim-form-error" class="error-msg" hidden></div>
     <form id="dagitim-form">
       <div class="form-row-2">
-        <div>
+        <div id="d-tarih-wrap">
           <label>Dağıtım Tarihi *</label>
           <input type="date" id="d-tarih" required />
         </div>
@@ -614,10 +614,13 @@
           </select>
         </div>
       </div>
-      <label>Kime Verildi (ekip / atölye / kişi) *</label>
-      <input type="text" id="d-kime" required />
-      <label>Not</label>
-      <input type="text" id="d-not" />
+      <p id="d-hazir-bilgi" hidden style="margin:6px 0 0;font-size:var(--fs-sm);color:#555;">Numune hazır olarak işaretlenir ve talep eden hesaba bildirim gider. İsim girmeniz gerekmez. Üretim veya Fason'dan biri teslim almaya geldiğinde, onun adıyla dağıtım kaydı ekleyin.</p>
+      <div id="d-kime-wrap">
+        <label>Kime Verildi (ekip / atölye / kişi) *</label>
+        <input type="text" id="d-kime" required />
+        <label>Not</label>
+        <input type="text" id="d-not" />
+      </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="dagitim-cancel">Vazgeç</button>
         <button type="submit" class="btn-primary" id="dagitim-save">Kaydet</button>
@@ -2201,11 +2204,35 @@ el("numune-form").addEventListener("submit", async (ev)=>{
 
 let dagitimForNumuneId = null;
 
+function updateDagitimTipUi(){
+  const hazir = el("d-tip").value === "hazir";
+  el("d-tarih-wrap").hidden = hazir;
+  el("d-kime-wrap").hidden = hazir;
+  el("d-hazir-bilgi").hidden = !hazir;
+  el("d-tarih").required = !hazir;
+  el("d-kime").required = !hazir;
+  el("dagitim-save").textContent = hazir ? "Hazır Olarak İşaretle" : "Kaydet";
+}
+el("d-tip").addEventListener("change", updateDagitimTipUi);
+
 function openDagitimModal(numuneId){
   dagitimForNumuneId = numuneId;
   el("dagitim-form").reset();
   el("d-tarih").value = todayStr();
   el("dagitim-form-error").hidden = true;
+  // Bekleyen talep varsa "Hazır" secenegi (isim/tarih girmeden) en basta ve varsayilan olarak gelir.
+  const tipSel = el("d-tip");
+  Array.from(tipSel.querySelectorAll('option[value="hazir"]')).forEach(function(o){ o.remove(); });
+  if(pendingTalepFor(numuneId)){
+    const o = document.createElement("option");
+    o.value = "hazir";
+    o.textContent = "Hazır (isim girmeden)";
+    tipSel.insertBefore(o, tipSel.firstChild);
+    tipSel.value = "hazir";
+  } else {
+    tipSel.value = "uretim";
+  }
+  updateDagitimTipUi();
   el("modal-dagitim").hidden = false;
 }
 el("dagitim-cancel").addEventListener("click", ()=> el("modal-dagitim").hidden = true);
@@ -2214,6 +2241,31 @@ el("dagitim-form").addEventListener("submit", async (ev)=>{
   ev.preventDefault();
   const btn = el("dagitim-save");
   btn.disabled = true;
+  if(el("d-tip").value === "hazir"){
+    const hazirErr = el("dagitim-form-error");
+    const talep = pendingTalepFor(dagitimForNumuneId);
+    if(!talep){
+      hazirErr.textContent = "Bu numune için bekleyen talep bulunamadı.";
+      hazirErr.hidden = false;
+      btn.disabled = false;
+      return;
+    }
+    const hr = await fetch("/api/talepler/" + encodeURIComponent(talep.id) + "/tamamla", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    btn.disabled = false;
+    if(!hr.ok){
+      const hd = await hr.json().catch(function(){ return {}; });
+      hazirErr.textContent = hr.status === 403 ? "Bu işlem için yetkiniz yok." : "Kaydedilemedi: " + (hd.error || hr.status);
+      hazirErr.hidden = false;
+      return;
+    }
+    el("modal-dagitim").hidden = true;
+    showToast("Numune hazır olarak işaretlendi, talep edene bildirim gönderildi.");
+    await loadNumuneler();
+    return;
+  }
   const payload = {
     numune_id: dagitimForNumuneId,
     dagitim_tarihi: el("d-tarih").value,
