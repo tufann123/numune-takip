@@ -70,11 +70,11 @@ function getCookie(request, name) {
 
 export function sessionCookieHeader(token, days = 30) {
   const maxAge = days * 24 * 60 * 60;
-  return `session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
+  return `session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=None ; Partitioned; Max-Age=${maxAge}`;
 }
 
 export function clearSessionCookieHeader() {
-  return `session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+  return `session=; Path=/; HttpOnly; Secure; SameSite=None ; Partitioned ; Max-Age=0`;
 }
 
 // Cagiran fonksiyonun, kullaniciyi tanimak icin cagirdigi ana fonksiyon.
